@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Leg Swing Energy Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: lab instrument. Results strip on top, live leg + controls side by side, trace chart and comparison below. */
+:root {
+  --bg: #eef1f4;
+  --surface: #ffffff;
+  --ink: #16202b;
+  --muted: #5a6776;
+  --line: #d6dde5;
+  --hip: #1f5fc4;
+  --knee: #c9620f;
+  --ankle: #13866b;
+  --total: #16202b;
+  --soft: #e6ebf1;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1319; --surface: #151c24; --ink: #e4e9ef; --muted: #93a0ae; --line: #28323e;
+    --hip: #6f9ff5; --knee: #f09a4a; --ankle: #45c79e; --total: #e4e9ef; --soft: #1c252f; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1319; --surface: #151c24; --ink: #e4e9ef; --muted: #93a0ae; --line: #28323e;
+  --hip: #6f9ff5; --knee: #f09a4a; --ankle: #45c79e; --total: #e4e9ef; --soft: #1c252f; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 20px 16px 48px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.wrap > *, .main-grid > *, .stack > * { min-width: 0; }
+header h1 { font-family: var(--font-display); font-weight: 600; font-size: 28px; line-height: 1.15; margin: 0 0 4px; text-wrap: balance; letter-spacing: -0.01em; }
+header p { margin: 0; color: var(--muted); max-width: 68ch; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+.panel h2 { font-family: var(--font-display); font-weight: 600; font-size: 16px; margin: 0 0 10px; letter-spacing: 0.01em; }
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 2px; }
+.tile .k { font-size: 12.5px; color: var(--muted); }
+.tile .v { font-family: var(--font-mono); font-size: 26px; font-weight: 500; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.tile .v small { font-size: 14px; color: var(--muted); font-weight: 400; margin-left: 3px; }
+.tile .s { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tile.main { border-left: 4px solid var(--hip); }
+.tile.stance { border-left: 4px solid var(--ankle); }
+.tile.total { border-left: 4px solid var(--ink); }
+.main-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.stack { display: grid; gap: 16px; }
+.canvas-box { position: relative; width: 100%; aspect-ratio: 1 / 1; max-height: 520px; }
+.canvas-box.chart { aspect-ratio: auto; height: 240px; }
+canvas { display: block; width: 100%; height: 100%; }
+.bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin-top: 8px; }
+.live { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.live div { background: var(--soft); border-radius: 6px; padding: 6px 8px; }
+.live .k { font-size: 11.5px; color: var(--muted); display: block; }
+.live .v { font-family: var(--font-mono); font-size: 14px; font-variant-numeric: tabular-nums; }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12.5px; color: var(--muted); }
+.legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--soft); flex-wrap: wrap; }
+.seg button { font: inherit; font-size: 13.5px; border: 0; background: transparent; color: var(--ink); padding: 7px 11px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--hip); color: #fff; }
+.seg button:focus-visible, .btn:focus-visible, input:focus-visible { outline: 2px solid var(--hip); outline-offset: 2px; }
+.btn { font: inherit; font-size: 13.5px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+.btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); min-width: 74px; }
+.controls { display: grid; gap: 16px; }
+.group { display: grid; gap: 8px; }
+.group > .lbl { font-size: 12.5px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+.row { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; }
+.row label { font-size: 14px; }
+.row output { font-family: var(--font-mono); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.row input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--hip); }
+.row .hint { grid-column: 1 / -1; font-size: 12.5px; color: var(--muted); }
+.check { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: start; font-size: 14px; }
+.check input { margin-top: 4px; accent-color: var(--hip); width: 16px; height: 16px; }
+.check .hint { grid-column: 2; font-size: 12.5px; color: var(--muted); }
+.disabled { opacity: 0.45; }
+.hidden { display: none !important; }
+.btn.small { font-size: 12.5px; padding: 4px 9px; }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.hint.warn { color: var(--knee); font-weight: 500; }
+.sweep { display: grid; gap: 4px; }
+.canvas-box.sweepbox { aspect-ratio: auto; height: 130px; }
+.sweep .hint { font-size: 12.5px; color: var(--muted); }
+.facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.facts div { background: var(--soft); border-radius: 6px; padding: 6px 8px; }
+.facts .k { font-size: 11.5px; color: var(--muted); display: block; }
+.facts .v { font-family: var(--font-mono); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 8px 8px; border-bottom: 1px solid var(--line); }
+th { font-size: 12.5px; color: var(--muted); font-weight: 500; }
+td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+tr.cur td { background: var(--soft); font-weight: 600; }
+.tablewrap { overflow-x: auto; }
+.notes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.notes p, .notes li { color: var(--ink); max-width: 68ch; font-size: 14px; }
+.notes ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.notes p { margin: 0 0 8px; }
+pre { font-family: var(--font-mono); font-size: 12.5px; background: var(--soft); border-radius: 8px; padding: 10px; overflow-x: auto; margin: 0 0 8px; line-height: 1.55; }
+.muted { color: var(--muted); }
+@media (max-width: 900px) {
+  .main-grid { grid-template-columns: 1fr; }
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .notes { grid-template-columns: 1fr; }
+}
+@media (max-width: 460px) {
+  header h1 { font-size: 23px; }
+  .tile .v { font-size: 21px; }
+  .live { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .canvas-box.chart { height: 210px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Leg Swing Energy Simulator</h1>
+    <p>A two-segment leg (thigh, then lower leg + foot) swings from the hip, either hanging in the air or running over real ground. You set the motion; the simulator solves for the hip and knee torques that produce it and adds up the work the muscles must do.</p>
+  </header>
+
+  <section class="tiles" aria-label="Results">
+    <div class="tile main" id="t1"><span class="k" id="t1k"></span><span class="v" id="t1v">–</span><span class="s" id="t1s"></span></div>
+    <div class="tile" id="t2"><span class="k" id="t2k"></span><span class="v" id="t2v">–</span><span class="s" id="t2s"></span></div>
+    <div class="tile" id="t3"><span class="k" id="t3k"></span><span class="v" id="t3v">–</span><span class="s" id="t3s"></span></div>
+    <div class="tile" id="t4"><span class="k" id="t4k"></span><span class="v" id="t4v">–</span><span class="s" id="t4s"></span></div>
+  </section>
+
+  <div class="main-grid">
+    <div class="stack">
+      <section class="panel" aria-label="Animation">
+        <div class="bar" style="margin:0 0 6px">
+          <h2 style="margin:0">Side view</h2>
+          <div class="legend"><span><i style="background:var(--hip)"></i>Thigh / hip torque</span><span><i style="background:var(--knee)"></i>Lower leg / knee torque</span><span id="ankleLegend"><i style="background:var(--ankle)"></i>Ankle torque (on the ground)</span></div>
+        </div>
+        <div class="canvas-box"><canvas id="legCanvas" aria-label="Animated leg swing" role="img"></canvas></div>
+        <div class="bar">
+          <button class="btn primary" id="playBtn" type="button">Pause</button>
+          <div class="seg" role="group" aria-label="Playback speed" id="speedSeg">
+            <button type="button" data-v="0.1">0.1×</button><button type="button" data-v="0.25" aria-pressed="true">0.25×</button><button type="button" data-v="0.5">0.5×</button><button type="button" data-v="1">Real time</button>
+          </div>
+        </div>
+        <div class="live" aria-live="off">
+          <div><span class="k">Stride</span><span class="v" id="lPhase">–</span></div>
+          <div><span class="k">Hip angle</span><span class="v" id="lHip">–</span></div>
+          <div><span class="k">Knee bend</span><span class="v" id="lKnee">–</span></div>
+          <div><span class="k">Hip power</span><span class="v" id="lPh">–</span></div>
+          <div><span class="k">Knee power</span><span class="v" id="lPk">–</span></div>
+          <div><span class="k">Ankle power</span><span class="v" id="lPa">–</span></div>
+        </div>
+        <p class="muted" style="font-size:12.5px;margin:8px 0 0">Arcs show joint torque. Solid arc: the muscles are adding energy. Faded arc: they are braking. The faint leg is the other leg, half a stride behind.</p>
+      </section>
+
+      <section class="panel" aria-label="Traces over one stride">
+        <div class="bar" style="margin:0 0 8px">
+          <h2 style="margin:0">One stride, one leg</h2>
+          <div class="seg" role="group" aria-label="Chart" id="chartSeg">
+            <button type="button" data-v="power" aria-pressed="true">Power</button><button type="button" data-v="torque">Torque</button><button type="button" data-v="angle">Angles</button>
+          </div>
+        </div>
+        <div class="canvas-box chart"><canvas id="chartCanvas" aria-label="Chart of joint values over one stride" role="img"></canvas></div>
+        <div class="legend" id="chartLegend" style="margin-top:6px"></div>
+      </section>
+    </div>
+
+    <section class="panel controls" aria-label="Settings">
+      <div class="group">
+        <span class="lbl">Runner</span>
+        <div class="seg" role="group" aria-label="Runner" id="sexSeg">
+          <button type="button" data-v="male" aria-pressed="true">Average man</button><button type="button" data-v="female">Average woman</button>
+        </div>
+        <div class="row"><label for="height">Height</label><output id="heightO" for="height"></output><input type="range" id="height" min="140" max="205" step="0.5"></div>
+        <div class="row"><label for="mass">Body mass</label><output id="massO" for="mass"></output><input type="range" id="mass" min="40" max="150" step="0.5">
+          <span class="hint" id="legInfo"></span></div>
+      </div>
+
+      <div class="group">
+        <span class="lbl">Leg motion</span>
+        <div class="seg" role="group" aria-label="Leg motion" id="modeSeg">
+          <button type="button" data-v="real" aria-pressed="true">Realistic stride</button><button type="button" data-v="straight">Straight</button><button type="button" data-v="fold">Bend, then straighten</button><button type="button" data-v="bent">Stay bent</button>
+        </div>
+        <span class="hint muted" id="modeHint" style="font-size:12.5px"></span>
+        <div class="row" id="bendRow"><label for="bend">Maximum knee bend</label><output id="bendO" for="bend"></output><input type="range" id="bend" min="20" max="150" step="1" value="140"></div>
+        <div class="row" id="kneeRealRow"><label for="kneeReal">Peak knee bend in swing</label><output id="kneeRealO" for="kneeReal"></output><input type="range" id="kneeReal" min="40" max="140" step="1" value="96">
+          <span class="hint warn hidden" id="kneeWarn"></span>
+          <span class="hint"><button class="btn small" id="kneeAuto" type="button">Use typical for this speed</button></span></div>
+        <div class="sweep" id="sweepBox">
+          <div class="canvas-box sweepbox"><canvas id="sweepCanvas" role="img" aria-label="Leg-swing power against peak knee bend"></canvas></div>
+          <span class="hint" id="sweepHint"></span>
+        </div>
+      </div>
+
+      <div class="group">
+        <span class="lbl">Stride</span>
+        <div class="row" id="runRow"><label for="run">Running speed</label><output id="runO" for="run"></output><input type="range" id="run" min="2" max="6" step="0.1" value="3"></div>
+        <div class="row" id="landRow"><label for="land">Landing point</label><output id="landO" for="land"></output><input type="range" id="land" min="0" max="30" step="0.5" value="15">
+          <span class="hint">Angle from straight down at the hip to where the foot touches the ground. Larger means overstriding.</span>
+          <span class="hint"><button class="btn small" id="landAuto" type="button">Use typical</button></span></div>
+        <div class="row" id="contactRow"><label for="contact">Ground contact time</label><output id="contactO" for="contact"></output><input type="range" id="contact" min="60" max="320" step="1" value="247">
+          <span class="hint" id="contactHint"></span>
+          <span class="hint"><button class="btn small" id="contactAuto" type="button">Use typical</button></span></div>
+        <div class="row"><label for="cadence">Cadence</label><output id="cadenceO" for="cadence"></output><input type="range" id="cadence" min="140" max="220" step="2" value="180"><span class="hint" id="cadHint"></span></div>
+        <div class="row" id="arcRow"><label for="arc">Hip swing arc</label><output id="arcO" for="arc"></output><input type="range" id="arc" min="20" max="100" step="1" value="60"><span class="hint">Total angle from furthest back to furthest forward.</span></div>
+        <div class="facts" id="realInfo"></div>
+      </div>
+
+      <div class="group">
+        <span class="lbl">Physics</span>
+        <label class="check" id="gravityRow"><input type="checkbox" id="gravity" checked><span>Gravity</span><span class="hint" id="gravityHint">Lets the leg act as a pendulum, which lowers the muscle work.</span></label>
+        <label class="check"><input type="checkbox" id="share" checked><span>Hip and knee can share energy</span><span class="hint">Off: each joint pays for its own positive work, even when the other joint is braking at the same moment.</span></label>
+        <div class="row"><label for="elastic">Tendon energy return</label><output id="elasticO" for="elastic"></output><input type="range" id="elastic" min="0" max="100" step="1" value="0"><span class="hint">Share of the braking work that springs back instead of being lost.</span></div>
+        <div class="row"><label for="eff">Muscle efficiency</label><output id="effO" for="eff"></output><input type="range" id="eff" min="15" max="35" step="1" value="25"><span class="hint">Converts mechanical work into food energy burned.</span></div>
+      </div>
+      <button class="btn" id="resetBtn" type="button">Reset all settings</button>
+    </section>
+  </div>
+
+  <section class="panel" aria-label="Comparison">
+    <h2>All leg motions at your current settings</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Leg motion</th><th class="n">Leg swing, both legs</th><th class="n">Food energy</th><th class="n">kcal per hour</th></tr></thead>
+        <tbody id="cmpBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel notes" aria-label="How the model works">
+    <div>
+      <h2>How the model works</h2>
+      <p>The hip is pinned in place. The thigh swings as a smooth sine wave through the arc you set, once forward and once back each stride. In <em>Bend, then straighten</em> mode the knee goes from straight to the maximum bend and back to straight during the forward swing, and stays straight on the backward swing.</p>
+      <p>For each of 1,440 instants per stride the simulator solves the equations of motion for a double pendulum with real segment masses and inertias:</p>
+<pre>Q₁ = M₁₁θ̈ + M₁₂ψ̈ + m₂L₁c₂ sin(θ−ψ) ψ̇² + (m₁c₁ + m₂L₁) g sin θ
+Q₂ = M₁₂θ̈ + M₂₂ψ̈ − m₂L₁c₂ sin(θ−ψ) θ̇² + m₂c₂ g sin ψ
+knee torque = Q₂,   hip torque = Q₁ + Q₂
+power = torque × joint angular velocity</pre>
+      <p>θ is the thigh angle and ψ the lower-leg angle, both from vertical. Positive power is muscle work; negative power is braking, assumed lost unless tendon return is turned up. Both legs are counted.</p>
+      <h2 style="margin-top:14px">Realistic stride</h2>
+      <p>The foot lands ahead of the hip, stays planted while the body runs over it, then rolls onto the ball of the foot and pushes off. During contact the thigh angle and hip height are solved so the foot never slides. Between steps the body flies on a free-fall arc. The knee follows typical running values: about 20° at landing, about 45° under load, about 22° at toe-off, then a deep bend in swing that grows with speed. If the foot would hit the ground on its way in to landing (for example when it lands close under the hip), the knee stays bent a little longer before touchdown, as a runner would. You can override that swing bend; the small chart under the control reruns the whole stride at every bend from 40° to 140°.</p>
+      <p>The ground force follows a spring-mass pattern sized so it supports body weight over each step. The hip's vertical acceleration acts on the swinging leg as extra or reduced gravity: about 2–3 g while the other foot is pushing, zero in the air. The swing phase and the stance phase are added up separately.</p>
+      <p>Stance: the ground force acts at the centre of pressure, which moves from just behind the ankle to the ball of the foot and stays there as the heel lifts. Its horizontal part points along the line toward the hip, adjusted so braking and propulsion cancel over each contact (steady speed). Hip, knee and ankle moments come from that force, treating the leg as weightless while it carries the body; the leg's own weight and inertia are small next to 2–3 body weights. Joint power is moment times joint angular speed. Summed over the three joints it matches the power delivered to the body to within about 5%.</p>
+    </div>
+    <div>
+      <h2>Assumptions</h2>
+      <ul>
+        <li>Average bodies from the CDC (2021–2023): man 175.0 cm, 90.3 kg; woman 161.3 cm, 77.9 kg.</li>
+        <li>Segment masses, centres of mass and inertias from de Leva (1996); segment lengths from Winter's ratios of height.</li>
+        <li>Lower leg and foot move as one rigid piece; the foot's mass sits just below the ankle.</li>
+        <li>Cadence counts steps per minute, both feet. Each leg makes cadence ÷ 120 strides per second.</li>
+        <li>Simple modes: the hip does not move and nothing touches the ground.</li>
+        <li>Realistic stride, typical values: the foot lands about 15° in front of the hip (0.26 leg lengths ahead) and pushes off 0.54 leg lengths behind, so contact lasts about 0.8 leg lengths of travel. It rolls 40° over the ball of the foot in the second half of contact. The pelvis does not tilt or rotate.</li>
+        <li>The swinging leg's foot is lumped with the shin, so the ankle only appears during stance.</li>
+        <li>In stance, real tendons (especially the Achilles) store braking work and give much of it back. About 35% tendon energy return brings the whole-stride food energy in line with measured running costs (roughly 3.7–4 J per kg per metre).</li>
+        <li>Setting the landing point keeps the push-off point where it was, so contact time changes. Setting the contact time moves the push-off point. Shorter contact means a harder push from the ground, since the same body weight has to be supported in less time.</li>
+        <li>All knee motion is driven by muscle. Real runners get much of the knee bend for free from push-off and whip-like coupling with the thigh, so measured costs are lower than <em>Bend, then straighten</em> shows here.</li>
+      </ul>
+    </div>
+  </section>
+</div>
+
+<script>
+/*PHYSICS*/
+
+const AVG = { male: { h: 175.0, m: 90.3 }, female: { h: 161.3, m: 77.9 } };
+const DEFAULTS = { sex: 'male', h: 175.0, m: 90.3, mode: 'real', bend: 140, cadence: 180, arc: 60, run: 3.0, realKnee: null, landDeg: null, contactMs: null, gravity: true, share: true, elastic: 0, eff: 25 };
+const st = { ...DEFAULTS, play: 0.25, chart: 'power', playing: true, phase: 0, clock: 0 };
+let res = null;
+const $ = id => document.getElementById(id);
+const isReal = () => st.mode === 'real';
+const typicalKnee = () => Math.min(130, 60 + 12 * st.run);
+let sweep = null, sweepQueued = false;
+
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+let C = {};
+function readColors() { C = { hip: css('--hip'), knee: css('--knee'), ankle: css('--ankle'), ink: css('--ink'), muted: css('--muted'), line: css('--line'), soft: css('--soft'), total: css('--total'), surface: css('--surface') }; }
+
+function opts(mode) {
+  const m = mode || st.mode;
+  return { sex: st.sex, H: st.h / 100, M: st.m, mode: m, phmaxDeg: st.bend, cadence: st.cadence, arcDeg: st.arc, speed: st.run, realKnee: st.realKnee, landDeg: st.landDeg, contactMs: st.contactMs,
+           gravity: m === 'real' ? true : st.gravity, share: st.share, elastic: st.elastic / 100, eff: st.eff / 100 };
+}
+const fmt = (x, d = 0) => x.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+const pace = (v, dist) => { const s = dist / v, m = Math.floor(s / 60), r = Math.round(s - m * 60); return r === 60 ? `${m + 1}:00` : `${m}:${String(r).padStart(2, '0')}`; };
+const LABELS = { real: 'Realistic stride', straight: 'Straight', fold: 'Bend, then straighten', bent: 'Stay bent' };
+
+function recompute() {
+  res = simulate(opts());
+  const L = res.leg, real = isReal();
+  renderTiles();
+  $('legInfo').textContent = `One leg: ${fmt(L.legMass, 1)} kg, ${fmt(L.legLen * 100)} cm long (thigh ${fmt(L.L1 * 100)} cm).`;
+  $('cadHint').textContent = real
+    ? `${fmt(st.cadence / 120, 2)} strides per second per leg · each step takes ${fmt(60000 / st.cadence)} ms`
+    : `${fmt(st.cadence / 120, 2)} strides per second per leg · each swing lasts ${fmt(60000 / st.cadence)} ms`;
+  if (real) {
+    const I = res.info;
+    const facts = [['Lands ahead of hip', `${fmt(I.a * 100)} cm`], ['Pushes off behind', `${fmt(I.pushBehind * 100)} cm`], ['In the air', `${fmt(I.tf * 1000)} ms`],
+                   ['Step length', `${fmt(I.stepLen, 2)} m`], ['Peak ground force', `${fmt(I.peakGRF, 1)}× weight`], ['Hip bounce', `${fmt(I.bob * 100, 1)} cm`]];
+    // landing point and contact time controls reflect the values actually used
+    $('land').value = I.landDeg;
+    $('landO').textContent = st.landDeg == null ? `${fmt(I.landDeg, 1)}° · typical` : `${fmt(I.landDeg, 1)}° · typical is ${fmt(I.landTypical, 1)}°`;
+    $('landAuto').disabled = st.landDeg == null;
+    $('contact').min = Math.ceil(I.tcMin * 1000); $('contact').max = Math.floor(I.tcMax * 1000); $('contact').value = Math.round(I.tc * 1000);
+    $('contactO').textContent = st.contactMs == null ? `${fmt(I.tc * 1000)} ms · typical` : `${fmt(I.tc * 1000)} ms · typical is ${fmt(I.tcTypical * 1000)} ms`;
+    $('contactAuto').disabled = st.contactMs == null;
+    $('contactHint').textContent = `Range at this speed and cadence: ${fmt(I.tcMin * 1000)}–${fmt(I.tcMax * 1000)} ms. The foot has to pass under the hip, can't push off more than about 0.6 leg lengths behind it, and only one foot can be down at a time.` +
+      (I.tcLimited ? ` Your setting of ${fmt(st.contactMs)} ms is outside that range, so ${fmt(I.tc * 1000)} ms is used.` : '');
+    $('realInfo').innerHTML = facts.map(([k, v]) => `<div><span class="k">${k}</span><span class="v">${v}</span></div>`).join('');
+    const drag = I.minClear < -0.01;
+    $('kneeWarn').classList.toggle('hidden', !drag);
+    $('kneeWarn').textContent = drag ? `At this bend the foot would dip about ${fmt(-I.minClear * 100)} cm into the ground in mid-swing. A real runner would trip or have to lift the hip, so bend the knee more.` : '';
+    queueSweep();
+  }
+  const rows = [['real', `Realistic stride at ${fmt(st.run, 1)} m/s, knee ${fmt(st.realKnee ?? typicalKnee())}°, landing ${fmt(res.info ? res.info.landDeg : simulate(opts('real')).info.landDeg, 1)}°, contact ${fmt((res.info ? res.info.tc : simulate(opts('real')).info.tc) * 1000)} ms`], ['straight', 'Straight, ±' + st.arc / 2 + '°'], ['fold', `Bend to ${st.bend}°, then straighten`], ['bent', `Stay bent at ${st.bend}°`]];
+  $('cmpBody').innerHTML = rows.map(([m, label]) => {
+    const r = m === st.mode ? res : simulate(opts(m));
+    return `<tr class="${m === st.mode ? 'cur' : ''}"><td>${label}</td><td class="n">${fmt(r.mech)} W</td><td class="n">${fmt(r.metab)} W</td><td class="n">${fmt(r.kcalh)}</td></tr>`;
+  }).join('');
+  drawChart();
+}
+
+function tile(n, k, v, unit, s, cls) {
+  $('t' + n + 'k').textContent = k; $('t' + n + 'v').innerHTML = `${v}<small>${unit}</small>`; $('t' + n + 's').textContent = s;
+  $('t' + n).className = 'tile' + (cls ? ' ' + cls : '');
+}
+function renderTiles() {
+  if (isReal() && res.stance) {
+    const s = res.stance, tot = res.mech + s.mech, totMet = res.metab + s.metab;
+    tile(1, 'Swing phase, both legs', fmt(res.mech), 'W', `moving the legs through the air · ${fmt(res.perStride, 1)} J per stride per leg (hip +${fmt(res.hipPos)} J, knee +${fmt(res.kneePos)} J)`, 'main');
+    tile(2, 'Stance phase, both legs', fmt(s.mech), 'W', `holding up and pushing the body · ${fmt(s.perStep, 1)} J per step (ankle +${fmt(s.anklePos)} J, knee +${fmt(s.kneePos)} J, hip +${fmt(s.hipPos)} J)`, 'stance');
+    tile(3, 'Whole stride', fmt(tot), 'W', `mechanical · swing ${fmt(100 * res.mech / tot)}%, stance ${fmt(100 * s.mech / tot)}% · ${fmt(tot / st.m, 2)} W/kg`, 'total');
+    tile(4, 'Food energy burned, whole stride', fmt(totMet), 'W', `≈ ${fmt(totMet * 3600 / 4184)} kcal per hour · swing ${fmt(res.metab)} W + stance ${fmt(s.metab)} W at ${st.eff}% efficiency`);
+    return;
+  }
+  tile(1, 'Leg-swing power, both legs', fmt(res.mech), 'W', `${fmt(res.mech / 2)} W per leg · ${fmt(res.mech / st.m, 2)} W/kg body mass`, 'main');
+  tile(2, 'Food energy burned', fmt(res.metab), 'W', `≈ ${fmt(res.kcalh)} kcal per hour at ${st.eff}% efficiency`);
+  tile(3, 'Muscle work per stride, one leg', fmt(res.perStride, 1), 'J', `hip +${fmt(res.hipPos, 1)} / −${fmt(res.hipNeg, 1)} J, knee +${fmt(res.kneePos, 1)} / −${fmt(res.kneeNeg, 1)} J`);
+  if (st.mode === 'fold') tile(4, 'Peak joint speed', fmt(res.peakKneeDeg), '°/s', `knee; hip peaks at ${fmt(res.peakHipDeg)}°/s`);
+  else tile(4, 'Peak joint speed', fmt(res.peakHipDeg), '°/s', 'hip (the knee does not move)');
+}
+
+function syncControls() {
+  const real = isReal();
+  for (const [segId, key] of [['sexSeg', 'sex'], ['modeSeg', 'mode'], ['chartSeg', 'chart']])
+    $(segId).querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === st[key])));
+  $('speedSeg').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.v === st.play)));
+  $('height').value = st.h; $('heightO').textContent = `${fmt(st.h, 1)} cm`;
+  $('mass').value = st.m; $('massO').textContent = `${fmt(st.m, 1)} kg`;
+  $('bend').value = st.bend; $('bendO').textContent = `${st.bend}°`;
+  $('cadence').value = st.cadence; $('cadenceO').textContent = `${st.cadence} spm`;
+  $('arc').value = st.arc; $('arcO').textContent = `${st.arc}° (±${st.arc / 2}°)`;
+  $('run').value = st.run; $('runO').textContent = `${fmt(st.run, 1)} m/s · ${pace(st.run, 1609.34)} /mi · ${pace(st.run, 1000)} /km`;
+  $('elastic').value = st.elastic; $('elasticO').textContent = `${st.elastic}%`;
+  $('eff').value = st.eff; $('effO').textContent = `${st.eff}%`;
+  $('gravity').checked = real ? true : st.gravity; $('gravity').disabled = real; $('share').checked = st.share;
+  $('gravityRow').classList.toggle('disabled', real);
+  $('gravityHint').textContent = real ? 'Always on when the runner has a real ground under them.' : 'Lets the leg act as a pendulum, which lowers the muscle work.';
+  $('bendRow').classList.toggle('hidden', st.mode === 'straight' || real);
+  $('arcRow').classList.toggle('hidden', real);
+  $('runRow').classList.toggle('hidden', !real);
+  $('realInfo').classList.toggle('hidden', !real);
+  $('kneeRealRow').classList.toggle('hidden', !real);
+  $('landRow').classList.toggle('hidden', !real); $('ankleLegend').classList.toggle('hidden', !real); $('contactRow').classList.toggle('hidden', !real); $('sweepBox').classList.toggle('hidden', !real);
+  const kr = st.realKnee ?? typicalKnee();
+  $('kneeReal').value = kr;
+  $('kneeRealO').textContent = st.realKnee == null ? `${fmt(kr)}° · typical for this speed` : `${fmt(kr)}° · typical is ${fmt(typicalKnee())}°`;
+  $('kneeAuto').disabled = st.realKnee == null;
+  $('modeHint').textContent = {
+    real: 'Foot plants on the ground, the body bounces, and the knee follows typical running motion. Swing (leg in the air) and stance (foot on the ground) are measured separately.',
+    straight: 'The hip is fixed in the air and the leg swings like a stiff pendulum, forward and back.',
+    fold: 'The knee bends to the maximum at mid-swing and is straight again when the forward swing ends. Straight on the way back.',
+    bent: 'The knee is held at the maximum bend for the whole stride, both swings.'
+  }[st.mode];
+  $('playBtn').textContent = st.playing ? 'Pause' : 'Play';
+}
+
+function bindSeg(id, key, num) {
+  $(id).addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const v = num ? +b.dataset.v : b.dataset.v;
+    if (key === 'sex') { st.sex = v; st.h = AVG[v].h; st.m = AVG[v].m; } else st[key] = v;
+    syncControls(); if (key === 'chart') drawChart(); else if (key !== 'play') recompute();
+  });
+}
+bindSeg('sexSeg', 'sex'); bindSeg('modeSeg', 'mode'); bindSeg('chartSeg', 'chart'); bindSeg('speedSeg', 'play', true);
+for (const [id, key] of [['height', 'h'], ['mass', 'm'], ['bend', 'bend'], ['cadence', 'cadence'], ['arc', 'arc'], ['run', 'run'], ['elastic', 'elastic'], ['eff', 'eff']])
+  $(id).addEventListener('input', e => { st[key] = +e.target.value; syncControls(); recompute(); });
+for (const id of ['gravity', 'share']) $(id).addEventListener('change', e => { st[id] = e.target.checked; recompute(); });
+$('kneeReal').addEventListener('input', e => { st.realKnee = +e.target.value; syncControls(); recompute(); });
+$('land').addEventListener('input', e => { st.landDeg = +e.target.value; syncControls(); recompute(); });
+$('landAuto').addEventListener('click', () => { st.landDeg = null; syncControls(); recompute(); });
+$('contact').addEventListener('input', e => { st.contactMs = +e.target.value; syncControls(); recompute(); });
+$('contactAuto').addEventListener('click', () => { st.contactMs = null; syncControls(); recompute(); });
+$('kneeAuto').addEventListener('click', () => { st.realKnee = null; syncControls(); recompute(); });
+$('playBtn').addEventListener('click', () => { st.playing = !st.playing; syncControls(); });
+$('resetBtn').addEventListener('click', () => { Object.assign(st, DEFAULTS); syncControls(); recompute(); });
+
+// ---------- canvases ----------
+function fitCanvas(cv) {
+  const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w: r.width, h: r.height };
+}
+const sampleAt = phase => Math.min(res.N - 1, Math.max(0, Math.floor(phase * res.N)));
+const absMax = arr => { let m = 0; for (const v of arr) if (isFinite(v)) m = Math.max(m, Math.abs(v)); return m; };
+
+// leg points in screen coords; hip at (hx, hy), y down
+function legPoints(i, sc, hx, hy) {
+  const L = res.leg, K = res.K, th = K.th[i], ps = th - K.ph[i];
+  const kx = hx + L.L1 * Math.sin(th) * sc, ky = hy + L.L1 * Math.cos(th) * sc;
+  const ax = kx + L.Ls * Math.sin(ps) * sc, ay = ky + L.Ls * Math.cos(ps) * sc;
+  if (K.stance[i] && res.info) {         // planted foot: ball fixed on the ground, heel lifting as the foot rolls
+    const al = K.ankleLift[i], gy = hy + K.hipY[i] * sc, fl = L.footLen * sc;
+    const x0 = hx + (K.footX[i] - res.info.ball * (1 - Math.cos(al))) * sc;   // ankle x if flat
+    const bx = x0 + 0.45 * fl;
+    return { kx, ky, ax, ay, heelx: bx - 0.70 * fl * Math.cos(al), heely: gy - 0.70 * fl * Math.sin(al), ballx: bx, bally: gy, toex: bx + 0.30 * fl, toey: gy, stance: true };
+  }
+  const p = res.info ? K.footPitch[i] : -ps;               // foot pitch, toe-down positive
+  const fx = Math.cos(p), fy = Math.sin(p), dx = -Math.sin(p), dy = Math.cos(p);
+  const gy = res.info ? hy + K.hipY[i] * sc : Infinity;   // toes bend at the ground instead of passing through it
+  return { kx, ky, ax, ay,
+    heelx: ax - 0.25 * L.footLen * fx * sc + L.ha * dx * sc, heely: ay - 0.25 * L.footLen * fy * sc + L.ha * dy * sc,
+    toex: ax + 0.75 * L.footLen * fx * sc + L.ha * dx * sc, toey: Math.min(gy, ay + 0.75 * L.footLen * fy * sc + L.ha * dy * sc), stance: false };
+}
+function drawLeg(ctx, P, hx, hy, alpha, wid) {
+  ctx.globalAlpha = alpha; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.strokeStyle = C.hip; ctx.lineWidth = wid * 1.25; ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(P.kx, P.ky); ctx.stroke();
+  ctx.strokeStyle = C.knee; ctx.lineWidth = wid; ctx.beginPath(); ctx.moveTo(P.kx, P.ky); ctx.lineTo(P.ax, P.ay); ctx.stroke();
+  ctx.lineWidth = wid * 0.7; ctx.beginPath(); ctx.moveTo(P.ax, P.ay); ctx.lineTo(P.heelx, P.heely);
+  if (P.stance) { ctx.lineTo(P.ballx, P.bally); ctx.lineTo(P.toex, P.toey); ctx.moveTo(P.ballx, P.bally); }
+  else ctx.lineTo(P.toex, P.toey);
+  ctx.lineTo(P.ax, P.ay); ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+function torqueArc(ctx, x, y, r, tau, tauMax, power, color) {
+  if (!isFinite(tau)) return;
+  const frac = Math.min(1, Math.abs(tau) / (tauMax || 1)); if (frac < 0.02) return;
+  const span = frac * Math.PI * 1.4, start = -Math.PI / 2, dir = tau > 0 ? -1 : 1;
+  ctx.save(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 4; ctx.lineCap = 'round';
+  ctx.globalAlpha = power >= 0 ? 0.95 : 0.3;
+  ctx.beginPath(); ctx.arc(x, y, r, start, start + dir * span, dir < 0); ctx.stroke();
+  const end = start + dir * span, ex = x + r * Math.cos(end), ey = y + r * Math.sin(end);
+  const tx = -Math.sin(end) * dir, ty = Math.cos(end) * dir;
+  ctx.beginPath(); ctx.moveTo(ex + tx * 9, ey + ty * 9); ctx.lineTo(ex - ty * 6, ey + tx * 6); ctx.lineTo(ex + ty * 6, ey - tx * 6); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+function arrow(ctx, x0, y0, x1, y1, color, width) {
+  const ang = Math.atan2(y1 - y0, x1 - x0);
+  ctx.save(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1 - 8 * Math.cos(ang), y1 - 8 * Math.sin(ang)); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 - 11 * Math.cos(ang - 0.4), y1 - 11 * Math.sin(ang - 0.4)); ctx.lineTo(x1 - 11 * Math.cos(ang + 0.4), y1 - 11 * Math.sin(ang + 0.4)); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+function drawLegCanvas() {
+  const cv = $('legCanvas'); const { ctx, w, h } = fitCanvas(cv);
+  ctx.clearRect(0, 0, w, h);
+  const L = res.leg, K = res.K, S = res.S, real = isReal();
+  const i = sampleAt(st.phase), j2 = sampleAt((st.phase + 0.5) % 1);
+  ctx.font = '12px "IBM Plex Sans", system-ui, sans-serif';
+  let hx = w * 0.5, hy, sc;
+  if (real) {
+    const I = res.info;
+    sc = Math.min(h * 0.80 / (I.hipMax + 0.06), w / 1.75);
+    const gy = h * 0.90;                          // ground line
+    hy = gy - K.hipY[i] * sc;
+    // ground with marks scrolling backward at running speed
+    ctx.strokeStyle = C.muted; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke();
+    const spacing = 0.25 * sc, off = ((st.clock * st.run * sc) % spacing + spacing) % spacing;
+    ctx.strokeStyle = C.line; ctx.lineWidth = 1;
+    for (let x = -off; x < w + spacing; x += spacing) { ctx.beginPath(); ctx.moveTo(x, gy); ctx.lineTo(x - 7, gy + 8); ctx.stroke(); }
+    // hip height trace
+    ctx.strokeStyle = C.line; ctx.setLineDash([3, 5]); ctx.beginPath(); ctx.moveTo(hx - 0.55 * sc, gy - I.hipMax * sc); ctx.lineTo(hx + 0.55 * sc, gy - I.hipMax * sc); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = C.muted; ctx.textAlign = 'left'; ctx.fillText(`running at ${fmt(st.run, 1)} m/s →`, 10, gy + 22 > h - 4 ? gy - 8 : gy + 22);
+    // ground force arrows for whichever foot is planted
+    for (const k of [i, j2]) if (K.stance[k] && K.grf[k] > 0.02) {
+      const cx = hx + K.copX[k] * sc, fx = S.Fx[k], fy = S.Fy[k], d = Math.hypot(fx, fy) || 1, len = d * 0.16 * sc;
+      arrow(ctx, cx, gy, cx + fx / d * len, gy - fy / d * len, C.ink, 3);
+      ctx.fillStyle = C.ink; ctx.textAlign = 'left'; ctx.fillText(`ground push ${fmt(K.grf[k], 1)}× body weight`, Math.min(cx + 10, w - 190), gy - len * 0.5);
+    }
+  } else {
+    sc = Math.min(w, h) * 0.78 / (L.legLen + 0.05); hy = h * 0.1;
+    const A = st.arc / 2 * Math.PI / 180, R = L.legLen * sc;
+    ctx.strokeStyle = C.line; ctx.lineWidth = 1; ctx.setLineDash([3, 5]);
+    ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(hx, hy + R + 8); ctx.stroke();
+    ctx.beginPath(); ctx.arc(hx, hy, R * 0.35, Math.PI / 2 - A, Math.PI / 2 + A); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = C.muted; ctx.textAlign = 'center';
+    ctx.fillText('← back', hx - R * 0.55, hy + R + 4); ctx.fillText('forward →', hx + R * 0.55, hy + R + 4);
+    // ankle path
+    ctx.strokeStyle = C.knee; ctx.globalAlpha = 0.35; ctx.setLineDash([2, 4]); ctx.beginPath();
+    for (let n = 0; n <= res.N; n += 8) { const P = legPoints(n % res.N, sc, hx, hy); if (n === 0) ctx.moveTo(P.ax, P.ay); else ctx.lineTo(P.ax, P.ay); }
+    ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+  }
+  const wid = Math.max(8, sc * 0.05);
+  drawLeg(ctx, legPoints(j2, sc, hx, hy), hx, hy, 0.2, wid);
+  const P = legPoints(i, sc, hx, hy);
+  drawLeg(ctx, P, hx, hy, 1, wid);
+  // torque arcs: scaled separately within each phase, since ground-contact moments are several times larger
+  const inSt = !!K.stance[i]; let tMax = 1e-9;
+  for (let n = 0; n < res.N; n++) if (!!K.stance[n] === inSt) for (const arr of [S.tauH, S.tauK, S.tauA || []]) if (isFinite(arr[n])) tMax = Math.max(tMax, Math.abs(arr[n]));
+  torqueArc(ctx, hx, hy, Math.max(20, sc * 0.08), S.tauH[i], tMax, S.Ph[i], C.hip);
+  torqueArc(ctx, P.kx, P.ky, Math.max(16, sc * 0.065), S.tauK[i], tMax, S.Pk[i], C.knee);
+  if (S.tauA && inSt) torqueArc(ctx, P.ax, P.ay, Math.max(14, sc * 0.055), S.tauA[i], tMax, S.Pa[i], C.ankle);
+  for (const [x, y] of [[hx, hy], [P.kx, P.ky], [P.ax, P.ay]]) { ctx.fillStyle = C.surface; ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+  ctx.fillStyle = C.muted; ctx.textAlign = 'left';
+  const phaseLabel = real ? (K.stance[i] ? 'Stance: the leg holds up and pushes the body' : 'Swing: muscles move the leg through the air') : (st.phase < 0.5 ? 'Forward swing' : 'Backward swing');
+  ctx.fillText(phaseLabel, 10, 18);
+  $('lPhase').textContent = `${fmt(st.phase * 100)}%`;
+  $('lHip').textContent = `${K.th[i] >= 0 ? '+' : ''}${fmt(K.th[i] * 180 / Math.PI)}°`;
+  $('lKnee').textContent = `${fmt(K.ph[i] * 180 / Math.PI)}°`;
+  $('lPh').textContent = isFinite(S.Ph[i]) ? `${fmt(S.Ph[i])} W` : '–';
+  $('lPk').textContent = isFinite(S.Pk[i]) ? `${fmt(S.Pk[i])} W` : '–';
+  $('lPa').textContent = S.Pa && isFinite(S.Pa[i]) ? `${fmt(S.Pa[i])} W` : '–';
+}
+
+function niceStep(range) { const r = range / 4, p = Math.pow(10, Math.floor(Math.log10(r))), n = r / p; return (n < 1.5 ? 1 : n < 3 ? 2 : n < 7 ? 5 : 10) * p; }
+function drawChart() {
+  if (!res) return;
+  const cv = $('chartCanvas'); const { ctx, w, h } = fitCanvas(cv);
+  ctx.clearRect(0, 0, w, h);
+  const S = res.S, K = res.K, N = res.N, real = isReal();
+  let series, unit;
+  const A0 = S.Pa ? Array.from(S.Pa, v => isFinite(v) ? v : 0) : null;
+  if (st.chart === 'power') { unit = 'W'; series = [['Hip', S.Ph, C.hip, []], ['Knee', S.Pk, C.knee, []]];
+    if (S.Pa) series.push(['Ankle (stance)', S.Pa, C.ankle, []]);
+    series.push([S.Pa ? 'All joints' : 'Hip + knee', Array.from(S.Ph, (v, k) => v + S.Pk[k] + (A0 ? A0[k] : 0)), C.total, [4, 4]]); }
+  else if (st.chart === 'torque') { unit = 'N·m'; series = [['Hip (+ swings forward)', S.tauH, C.hip, []], ['Knee (+ straightens)', S.tauK, C.knee, []]];
+    if (S.tauA) series.push(['Ankle (+ lifts the toes)', S.tauA, C.ankle, []]); }
+  else { unit = '°'; series = [['Thigh angle (+ forward)', Array.from(K.th, v => v * 180 / Math.PI), C.hip, []], ['Knee bend', Array.from(K.ph, v => v * 180 / Math.PI), C.knee, []]]; }
+  let lo = Infinity, hi = -Infinity; for (const s of series) for (const v of s[1]) { if (!isFinite(v)) continue; if (v < lo) lo = v; if (v > hi) hi = v; }
+  lo = Math.min(lo, 0); hi = Math.max(hi, 0); if (hi - lo < 1e-6) { hi += 1; lo -= 1; }
+  const step = niceStep(hi - lo); lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
+  const padL = 48, padR = 10, padT = 10, padB = 26, pw = w - padL - padR, ph = h - padT - padB;
+  const X = f => padL + f * pw, Y = v => padT + (hi - v) / (hi - lo) * ph;
+  ctx.font = '11.5px "IBM Plex Sans", system-ui, sans-serif'; ctx.textAlign = 'center';
+  if (real) {
+    const sw = res.info.Tsw / res.T;
+    ctx.fillStyle = C.soft; ctx.fillRect(X(sw), padT, pw * (1 - sw), ph);
+    ctx.fillStyle = C.muted; ctx.fillText('swing', X(sw / 2), h - 8); ctx.fillText('stance', X((1 + sw) / 2), h - 8);
+  } else {
+    ctx.fillStyle = C.soft; ctx.fillRect(X(0), padT, pw / 2, ph);
+    ctx.fillStyle = C.muted; ctx.fillText('forward swing', X(0.25), h - 8); ctx.fillText('backward swing', X(0.75), h - 8);
+  }
+  ctx.textAlign = 'right'; ctx.font = '11px "IBM Plex Mono", ui-monospace, monospace';
+  for (let v = lo; v <= hi + step * 0.01; v += step) {
+    const y = Y(v); ctx.strokeStyle = Math.abs(v) < step * 0.01 ? C.muted : C.line; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y); ctx.stroke();
+    ctx.fillStyle = C.muted; ctx.fillText(`${fmt(v)}`, padL - 6, y + 4);
+  }
+  ctx.save(); ctx.translate(11, padT + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.font = '11px "IBM Plex Sans", system-ui, sans-serif'; ctx.fillText(unit, 0, 0); ctx.restore();
+  for (const [, arr, col, dash] of series) {
+    ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.setLineDash(dash); ctx.beginPath();
+    let pen = false;
+    for (let k = 0; k <= N; k += 2) { const v = arr[k % N]; if (!isFinite(v)) { pen = false; continue; } const x = X(k / N), y = Y(v); if (!pen) { ctx.moveTo(x, y); pen = true; } else ctx.lineTo(x, y); }
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  const i = sampleAt(st.phase); ctx.strokeStyle = C.ink; ctx.globalAlpha = 0.5; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(X(st.phase), padT); ctx.lineTo(X(st.phase), padT + ph); ctx.stroke(); ctx.globalAlpha = 1;
+  for (const [, arr, col] of series) { if (!isFinite(arr[i])) continue; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(X(st.phase), Y(arr[i]), 3.5, 0, Math.PI * 2); ctx.fill(); }
+  $('chartLegend').innerHTML = series.map(([n, , col, dash]) => `<span><i style="background:${col};${dash.length ? 'opacity:.6' : ''}"></i>${n}</span>`).join('') +
+    (st.chart === 'power' ? '<span>Above zero: muscles add energy. Below: braking.</span>' : '');
+}
+
+// ---------- swing power against peak knee bend ----------
+function queueSweep() {
+  if (sweepQueued) return; sweepQueued = true;
+  requestAnimationFrame(() => {
+    sweepQueued = false; if (!isReal()) return;
+    const pts = [];
+    for (let k = 40; k <= 140; k += 4) { const r = simulate({ ...opts('real'), realKnee: k, N: 480 }); pts.push([k, r.mech, r.info.minClear]); }
+    sweep = pts; drawSweep();
+  });
+}
+function drawSweep() {
+  if (!sweep || !isReal()) return;
+  const cv = $('sweepCanvas'); const { ctx, w, h } = fitCanvas(cv);
+  ctx.clearRect(0, 0, w, h);
+  const padL = 44, padR = 18, padT = 8, padB = 22, pw = w - padL - padR, ph = h - padT - padB;
+  let hi = 0; for (const p of sweep) hi = Math.max(hi, p[1]);
+  const step = niceStep(hi); hi = Math.ceil(hi / step) * step;
+  const X = k => padL + (k - 40) / 100 * pw, Y = v => padT + (1 - v / hi) * ph;
+  // foot-drag zone
+  ctx.fillStyle = C.soft;
+  for (let n = 0; n < sweep.length - 1; n++) if (sweep[n][2] < -0.01) ctx.fillRect(X(sweep[n][0]), padT, X(sweep[n + 1][0]) - X(sweep[n][0]) + 0.5, ph);
+  ctx.font = '11px "IBM Plex Mono", ui-monospace, monospace'; ctx.textAlign = 'right';
+  for (let v = 0; v <= hi + 1e-6; v += step) { const y = Y(v); ctx.strokeStyle = v === 0 ? C.muted : C.line; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y); ctx.stroke(); ctx.fillStyle = C.muted; ctx.fillText(`${fmt(v)} W`, padL - 5, y + 4); }
+  ctx.textAlign = 'center';
+  for (let k = 40; k <= 140; k += 20) ctx.fillText(`${k}°`, X(k), h - 6);
+  ctx.strokeStyle = C.hip; ctx.lineWidth = 2; ctx.beginPath();
+  sweep.forEach((p, n) => { if (n === 0) ctx.moveTo(X(p[0]), Y(p[1])); else ctx.lineTo(X(p[0]), Y(p[1])); }); ctx.stroke();
+  let best = sweep[0]; for (const p of sweep) if (p[2] >= -0.01 && (best[2] < -0.01 || p[1] < best[1])) best = p;
+  const ty = typicalKnee();
+  ctx.strokeStyle = C.muted; ctx.setLineDash([3, 4]); ctx.beginPath(); ctx.moveTo(X(ty), padT); ctx.lineTo(X(ty), padT + ph); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = C.muted; ctx.textAlign = X(ty) > w - 60 ? 'right' : 'left'; ctx.font = '11px "IBM Plex Sans", system-ui, sans-serif';
+  ctx.fillText('typical', X(ty) + (X(ty) > w - 60 ? -4 : 4), padT + 11);
+  const cur = st.realKnee ?? ty;
+  ctx.fillStyle = C.knee; ctx.beginPath(); ctx.arc(X(cur), Y(res.mech), 5, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = C.surface; ctx.lineWidth = 2; ctx.stroke();
+  $('sweepHint').textContent = `Leg-swing power against peak knee bend at this speed and cadence. Orange dot: your setting. Cheapest without the foot dragging: about ${best[0]}° (${fmt(best[1])} W).` +
+    (sweep.some(p => p[2] < -0.01) ? ' Shaded: the foot would drag.' : '');
+}
+
+let last = null;
+function frame(ts) {
+  if (last !== null && st.playing) { const dt = Math.min(0.1, (ts - last) / 1000) * st.play; st.phase = (st.phase + dt / res.T) % 1; st.clock += dt; }
+  last = ts;
+  drawLegCanvas(); drawChart();
+  requestAnimationFrame(frame);
+}
+
+function init() {
+  readColors();
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) { st.playing = false; st.phase = 0.3; }
+  syncControls(); recompute();
+  requestAnimationFrame(frame);
+  const mq = window.matchMedia('(prefers-color-scheme: dark)');
+  mq.addEventListener && mq.addEventListener('change', readColors);
+  new MutationObserver(readColors).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+}
+init();
+</script>
+</body>
+</html>
