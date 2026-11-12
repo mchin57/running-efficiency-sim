@@ -65,6 +65,16 @@ Also known and not yet fixed:
 - **Force timing.** The vertical ground force peaks at 33–37% of contact, against about 43% measured (its force-weighted centre is about 45%). At typical settings the timing shift sits at or near its limit.
 - **Push-off.** The heel lifts about 63° at toe-off, against about 40–49° measured. The final pressure point is the toe tip, whereas measured pressure ends under the big-toe pad, about 85% of the way along the foot.
 
+## Possible model updates
+
+Not started; listed for a future round. Each would move the default numbers.
+
+1. **Push off from the big-toe pad.** Move the final pressure point and the toe pivot from the toe tip to about 85% of the way along the foot, where measured pressure ends. Expected: less heel lift at toe-off (now about 63°, measured about 40–49°) and a shorter lever at the toe joint.
+2. **Let the ground force pass in front of and behind the hip.** For example, aim it at a centre of mass above the hip, or use a measured horizontal-force shape. Expected: the hip does some stance work, and knee moments and knee braking work drop (now about 1.4–1.7× and 2× published).
+3. **Peak the force later.** Change the vertical force shape so it peaks nearer 43% of contact, as measured, rather than 33–37%.
+
+Kept as they are, by choice: cadence defaults to 180 steps/min (its arrow shows the typical value), and settings that can't be steady running stay reachable, with a warning on the page.
+
 ## Development
 
 The page is built from two source files:
