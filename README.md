@@ -85,7 +85,13 @@ The page is built from two source files:
 ```
 python build.py       # writes index.html
 node tests/check.js   # sanity checks: known results, energy balance, geometry, all settings
+
+node tools/fetch-fukuchi.js    # downloads the measured running data into data/ (git-ignored), checking size and md5
+node tools/reduce-fukuchi.js   # reduces it to tests/data/fukuchi2017-summary.json (means and SDs across subjects)
+node tests/validate.js         # compares the model with the measurements (--cohort, --speed, --set key=value, --json)
 ```
+
+The measured data are from Fukuchi, Fukuchi & Duarte (2017), PeerJ 5:e3298, doi 10.7717/peerj.3298 (Figshare doi 10.6084/m9.figshare.4543435), licensed CC BY 4.0.
 
 ## Sources
 
