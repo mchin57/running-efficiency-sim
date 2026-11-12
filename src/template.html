@@ -78,6 +78,19 @@ canvas { display: block; width: 100%; height: 100%; }
 .row label { font-size: 14px; }
 .row output { font-family: var(--font-mono); font-size: 13.5px; font-variant-numeric: tabular-nums; }
 .row input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--hip); }
+.slider { grid-column: 1 / -1; position: relative; }
+.slider input[type=range] { display: block; margin: 0; }
+.slider.has-typ { padding-bottom: 17px; }
+/* "typical for this speed" marker: an arrow under the track at the typical value (left = --f along the track, allowing
+   for the thumb), with its label on whichever side has room. Click it to use the typical value. */
+.typ { display: none; position: absolute; top: 18px; left: calc(8px + (100% - 16px) * var(--f, 0)); border: 0; background: none; padding: 0;
+       font: inherit; font-size: 11.5px; line-height: 1.25; color: var(--muted); cursor: pointer; white-space: nowrap; transform: translateX(-5px); }
+.typ.on { display: block; }
+.typ.flip { transform: translateX(calc(-100% + 5px)); }
+.typ::before { content: '▲ '; color: var(--knee); font-size: 10px; }
+.typ.flip::before { content: none; }
+.typ.flip::after { content: ' ▲'; color: var(--knee); font-size: 10px; }
+.typ:hover { color: var(--ink); }
 .row .hint { grid-column: 1 / -1; font-size: 12.5px; color: var(--muted); }
 .check { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: start; font-size: 14px; }
 .check input { margin-top: 4px; accent-color: var(--hip); width: 16px; height: 16px; }
@@ -188,9 +201,9 @@ pre { font-family: var(--font-mono); font-size: 12.5px; background: var(--soft);
         </div>
         <span class="hint muted" id="modeHint" style="font-size:12.5px"></span>
         <div class="row" id="bendRow"><label for="bend">Maximum knee bend</label><output id="bendO" for="bend"></output><input type="range" id="bend" min="20" max="150" step="1" value="140"></div>
-        <div class="row" id="kneeRealRow"><label for="kneeReal">Peak knee bend in swing</label><output id="kneeRealO" for="kneeReal"></output><input type="range" id="kneeReal" min="40" max="140" step="1" value="96">
-          <span class="hint warn hidden" id="kneeWarn"></span>
-          <span class="hint"><button class="btn small" id="kneeAuto" type="button">Use typical for this speed</button></span></div>
+        <div class="row" id="kneeRealRow"><label for="kneeReal">Peak knee bend in swing</label><output id="kneeRealO" for="kneeReal"></output>
+          <div class="slider"><input type="range" id="kneeReal" min="40" max="140" step="1" value="96"><button class="typ" type="button" id="kneeRealTyp"></button></div>
+          <span class="hint warn hidden" id="kneeWarn"></span></div>
         <div class="sweep" id="sweepBox">
           <div class="canvas-box sweepbox"><canvas id="sweepCanvas" role="img" aria-label="Leg-swing power against peak knee bend"></canvas></div>
           <span class="hint" id="sweepHint"></span>
@@ -200,13 +213,19 @@ pre { font-family: var(--font-mono); font-size: 12.5px; background: var(--soft);
       <div class="group">
         <span class="lbl">Stride</span>
         <div class="row" id="runRow"><label for="run">Running speed</label><output id="runO" for="run"></output><input type="range" id="run" min="2" max="6" step="0.1" value="3"></div>
-        <div class="row" id="landRow"><label for="land">Landing point</label><output id="landO" for="land"></output><input type="range" id="land" min="0" max="30" step="0.5" value="15">
-          <span class="hint">Angle from straight down at the hip to where the foot touches the ground. Larger means overstriding.</span>
-          <span class="hint"><button class="btn small" id="landAuto" type="button">Use typical</button></span></div>
-        <div class="row" id="contactRow"><label for="contact">Ground contact time</label><output id="contactO" for="contact"></output><input type="range" id="contact" min="60" max="320" step="1" value="247">
+        <div class="row" id="landRow"><label for="land">Landing point</label><output id="landO" for="land"></output>
+          <div class="slider"><input type="range" id="land" min="0" max="30" step="0.5" value="15"><button class="typ" type="button" id="landTyp"></button></div>
+          <span class="hint">Angle from straight down at the hip to where the foot touches the ground. Larger means overstriding.</span></div>
+        <div class="row" id="contactRow"><label for="contact">Ground contact time</label><output id="contactO" for="contact"></output>
+          <div class="slider"><input type="range" id="contact" min="60" max="320" step="1" value="247"><button class="typ" type="button" id="contactTyp"></button></div></div>
+        <div class="row" id="contactLenRow"><label for="contactLen">Ground contact length</label><output id="contactLenO" for="contactLen"></output>
+          <div class="slider"><input type="range" id="contactLen" min="0.3" max="1.2" step="0.01" value="0.8"><button class="typ" type="button" id="contactLenTyp"></button></div>
+          <span class="hint">How far the body travels while the foot is down. Contact time and length move together (length = speed × time); set either one, and that one stays put when you change speed.</span>
           <span class="hint" id="contactHint"></span>
-          <span class="hint"><button class="btn small" id="contactAuto" type="button">Use typical</button></span></div>
-        <div class="row"><label for="cadence">Cadence</label><output id="cadenceO" for="cadence"></output><input type="range" id="cadence" min="140" max="220" step="2" value="180"><span class="hint" id="cadHint"></span></div>
+          <span class="hint warn hidden" id="balanceWarn"></span></div>
+        <div class="row"><label for="cadence">Cadence</label><output id="cadenceO" for="cadence"></output>
+          <div class="slider"><input type="range" id="cadence" min="120" max="220" step="2" value="180"><button class="typ" type="button" id="cadenceTyp"></button></div>
+          <span class="hint" id="cadHint"></span></div>
         <div class="row" id="arcRow"><label for="arc">Hip swing arc</label><output id="arcO" for="arc"></output><input type="range" id="arc" min="20" max="100" step="1" value="60"><span class="hint">Total angle from furthest back to furthest forward.</span></div>
         <div class="facts" id="realInfo"></div>
       </div>
@@ -243,10 +262,10 @@ knee torque = Q₂,   hip torque = Q₁ + Q₂
 power = torque × joint angular velocity</pre>
       <p>θ is the thigh angle and ψ the lower-leg angle, both from vertical. Positive power is muscle work; negative power is braking, assumed lost unless tendon return is turned up. Both legs are counted.</p>
       <h2 style="margin-top:14px">Realistic stride</h2>
-      <p>The foot lands heel first, ahead of the hip, with the toes up and the knee bent 20°. It slaps flat, stays planted while the body runs over it, then rolls onto the ball of the foot as the heel lifts, and pushes off. Between steps the body flies on a free-fall arc.</p>
+      <p>The foot lands heel first, ahead of the hip, with the toes up and the knee bent 20°. It slaps flat, stays planted while the body runs over it, then the heel lifts and the foot rolls over the ball onto the toes. If the leg needs more reach, the toes roll up too before the foot leaves the ground. Between steps the body flies on a free-fall arc.</p>
       <p>The ground force follows a spring-mass pattern sized so it supports body weight over each step. The body's height comes straight from that force, so the drawn hip, the swinging leg and the planted leg all share one motion. The hip's vertical acceleration acts on the swinging leg as extra or reduced gravity: about 2–3 g while the other foot is pushing, zero in the air. The swing phase and the stance phase are added up separately.</p>
-      <p>On the ground the knee bend is not set: it is whatever the leg needs to reach from the hip down to the planted foot, so it bends as the body sinks onto the leg. The foot slaps flat at the rate that gives a typical knee speed just after landing, and the heel lifts just enough to keep the knee from straightening much past 22° before toe-off. In the air the knee follows typical running values: a deep bend that grows with speed, then nearly straight before landing. If the foot would hit the ground on its way in to landing (for example when it lands close under the hip), the knee stays bent a little longer before touchdown, as a runner would. You can override that swing bend; the small chart under the control reruns the whole stride at every bend from 40° to 140°.</p>
-      <p>Stance: the ground force acts at the centre of pressure, which sits under the heel as the foot lowers, moves to the ball while the foot is flat, and stays on the ball while the heel lifts. The force points from there at the hip. Its timing within the contact shifts earlier or later so that braking and propulsion cancel over each contact (steady speed). Hip, knee and ankle moments come from that force, treating the leg as weightless while it carries the body; the leg's own weight and inertia are small next to 2–3 body weights. Because the force passes through the hip, the hip does no work during contact in this model: all of its work is in the swing. Joint power is moment times joint angular speed. Summed over the three joints it equals the power the ground force delivers to the body, and over each step the body ends with the energy it started with.</p>
+      <p>On the ground the knee bend is not set: it is whatever the leg needs to reach from the hip down to the planted foot, so it bends as the body sinks onto the leg. The foot slaps flat at the rate that gives a typical knee speed just after landing, and the heel lifts just enough to keep the knee from straightening much past 22° before toe-off. In the air the thigh swings forward to a peak that grows with speed as measured in runners (33° from vertical at 3 m/s, 51° at 6 m/s), then pulls back before landing, and the knee follows typical running values: a deep bend that grows with speed, then nearly straight before landing. If the foot would scuff the ground on its way in to landing (mostly at slow speeds and high cadences), the thigh swings a little further forward before pulling back, which lifts the foot. You can override the swing knee bend; the small chart under the control reruns the whole stride at every bend from 40° to 140°.</p>
+      <p>Stance: the ground force acts at the centre of pressure, which sits under the heel as the foot lowers, moves to the ball while the foot is flat, moves out along the flat toes to the tip while the heel lifts, and stays on the tip while the toes roll. The force points from there at the hip. Its timing within the contact shifts earlier or later so that braking and propulsion cancel over each contact (steady speed). Contact times where no timing can do that are left out of the contact-time range; if no contact time works with the chosen landing point, the page says so and tilts the force off the hip instead. Hip, knee, ankle and toe-joint moments come from that force, treating the leg as weightless while it carries the body; the leg's own weight and inertia are small next to 2–3 body weights. Because the force passes through the hip, the hip does no work during contact in this model: all of its work is in the swing. Joint power is moment times joint angular speed. Summed over the joints it equals the power the ground force delivers to the body, and over each step the body ends with the energy it started with.</p>
     </div>
     <div>
       <h2>Assumptions</h2>
@@ -256,10 +275,15 @@ power = torque × joint angular velocity</pre>
         <li>Lower leg and foot move as one rigid piece; the foot's mass sits just below the ankle.</li>
         <li>Cadence counts steps per minute, both feet. Each leg makes cadence ÷ 120 strides per second.</li>
         <li>Simple modes: the hip does not move and nothing touches the ground.</li>
-        <li>Realistic stride, typical values: the foot lands about 15° in front of the hip (0.26 leg lengths ahead) and pushes off 0.54 leg lengths behind, so contact lasts about 0.8 leg lengths of travel. The heel strikes with the toes 12° up and the foot is flat by 15% of the contact. The heel starts to lift at about 45% of the contact (earlier if the leg would otherwise straighten) and can lift up to 65°. At typical settings it lifts about 60° and the knee is 10–15° bent as the foot leaves the ground, so push-off is close to the limit of the leg's reach. The pelvis does not tilt or rotate.</li>
+        <li>Typical values for this speed (the arrows under the sliders) come from measured runners at 3.1–10 m/s (Clark, Meng &amp; Stearne 2020): the thigh's angle at touchdown sets the landing point (about 13–19° from 3 to 6 m/s), contact time is 0.78 × speed<sup>−0.89</sup> seconds, scaled with height (about 0.95–1.0 leg lengths of travel), and step rate is 0.31 × speed + 1.58 per second. Click an arrow to use that value. At slow speeds the model can't quite reach the typical contact length: braking and propulsion stop balancing first, so it uses the nearest it can.</li>
+        <li>Foot: the heel strikes with the toes 12° up and the foot is flat by 15% of the contact. The heel starts to lift at about 45% of the contact (earlier if, after its deepest bend, the knee would otherwise straighten past 30°) and can lift up to 65°, while the pressure moves out to the toe tip. The toes (the front 30% of the foot) then roll up about their tip, up to 45°, only as far as the leg needs to reach. The toe joint mostly absorbs energy as it bends. The pelvis does not tilt or rotate.</li>
         <li>The swinging leg's foot is lumped with the shin, so the ankle only appears during stance.</li>
+        <li>Peak forward thigh swing: 0.102 × speed + 0.273 radians from vertical (Clark, Meng &amp; Stearne 2020, runners at 3.1–10 m/s), and at least 4° past the touchdown angle. Cadence stays where you set it; runners in that study raised their step rate with speed (about 150 steps/min at 3 m/s, 205 at 6 m/s, shown by the cadence arrow), which makes swing cost climb much faster with speed than it does at a fixed cadence.</li>
         <li>In stance, real tendons (especially the Achilles) store braking work and give much of it back. About 40% tendon energy return brings the whole-stride food energy in line with measured running costs (roughly 3.7–4 J per kg per metre).</li>
-        <li>Setting the landing point keeps the push-off point where it was, so contact time changes. Setting the contact time moves the push-off point. Shorter contact means a harder push from the ground, since the same body weight has to be supported in less time.</li>
+        <li>Contact time and contact length are one setting (length = speed × time): set either, and the one you set stays put when you change speed. Setting it, or the landing point, moves the push-off point. Shorter contact means a harder push from the ground, since the same body weight has to be supported in less time.</li>
+        <li><strong>Read joint shares with care.</strong> The ground force is aimed through the hip, so in this model the hip does no work while the foot is down and the knee and ankle do all of it. In real runners the force line passes a little in front of and behind the hip and the hip muscles do a good share of stance work, so here the knee and ankle look more important than they are, with peak knee and ankle moments roughly 40–65% above measured values. Whole-stride totals are less affected than the split between joints.</li>
+        <li><strong>Cadence matters too much for swing.</strong> The swing leg follows a set path, so a higher cadence means the same path in less time, and swing work climbs very steeply. Measured limb-moving work rises much more gently with step rate. The direction is right; the size of the effect is exaggerated.</li>
+        <li><strong>Food energy is a rough conversion.</strong> All positive work is converted at one muscle efficiency (25% by default) and braking work is treated as free. Measured running looks far more efficient than 25% (apparent efficiencies of about 45–70% have been reported, largely thanks to tendon recoil), and braking work does cost some energy. That is why about 40% tendon return is needed to match measured costs. Comparisons between settings are more trustworthy than the absolute calories.</li>
         <li>All knee motion is driven by muscle. Real runners get much of the knee bend for free from push-off and whip-like coupling with the thigh, so measured costs are lower than <em>Bend, then straighten</em> shows here.</li>
       </ul>
     </div>
@@ -270,7 +294,7 @@ power = torque × joint angular velocity</pre>
 /*PHYSICS*/
 
 const AVG = { male: { h: 175.0, m: 90.3 }, female: { h: 161.3, m: 77.9 } };
-const DEFAULTS = { sex: 'male', h: 175.0, m: 90.3, mode: 'real', bend: 140, cadence: 180, arc: 60, run: 3.0, realKnee: null, landDeg: null, contactMs: null, gravity: true, share: true, elastic: 0, eff: 25 };
+const DEFAULTS = { sex: 'male', h: 175.0, m: 90.3, mode: 'real', bend: 140, cadence: 180, arc: 60, run: 3.0, realKnee: null, landDeg: null, contact: null, gravity: true, share: true, elastic: 0, eff: 25 };
 const st = { ...DEFAULTS, play: 0.25, chart: 'power', playing: true, phase: 0, clock: 0 };
 let res = null;
 const $ = id => document.getElementById(id);
@@ -287,7 +311,8 @@ function readColors() {
 
 function opts(mode) {
   const m = mode || st.mode;
-  return { sex: st.sex, H: st.h / 100, M: st.m, mode: m, phmaxDeg: st.bend, cadence: st.cadence, arcDeg: st.arc, speed: st.run, realKnee: st.realKnee, landDeg: st.landDeg, contactMs: st.contactMs,
+  return { sex: st.sex, H: st.h / 100, M: st.m, mode: m, phmaxDeg: st.bend, cadence: st.cadence, arcDeg: st.arc, speed: st.run, realKnee: st.realKnee, landDeg: st.landDeg,
+           contactMs: st.contact && st.contact.kind === 'time' ? st.contact.ms : null, contactLen: st.contact && st.contact.kind === 'length' ? st.contact.m : null,
            gravity: m === 'real' ? true : st.gravity, share: st.share, elastic: st.elastic / 100, eff: st.eff / 100 };
 }
 const fmt = (x, d = 0) => x.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -306,22 +331,32 @@ function recompute() {
     const I = res.info;
     const facts = [['Lands ahead of hip', `${fmt(I.a * 100)} cm`], ['Pushes off behind', `${fmt(I.pushBehind * 100)} cm`], ['In the air', `${fmt(I.tf * 1000)} ms`],
                    ['Step length', `${fmt(I.stepLen, 2)} m`], ['Peak ground force', `${fmt(I.peakGRF, 1)}× weight`], ['Force peaks', `${fmt(I.forcePeakAt * 100)}% into contact`],
-                   ['Hip bounce', `${fmt(I.bob * 100, 1)} cm`], ['Knee bend under load', `${fmt(I.kneeLoadDeg)}°`], ['Heel lift at push-off', `${fmt(I.rollDeg)}°`]];
+                   ['Hip bounce', `${fmt(I.bob * 100, 1)} cm`], ['Knee bend under load', `${fmt(I.kneeLoadDeg)}°`], ['Heel lift / toe roll', `${fmt(I.rollDeg)}° / ${fmt(I.toeRollDeg)}°`]];
     // landing point and contact time controls reflect the values actually used
     $('land').value = I.landDeg;
-    $('landO').textContent = st.landDeg == null ? `${fmt(I.landDeg, 1)}° · typical` : `${fmt(I.landDeg, 1)}° · typical is ${fmt(I.landTypical, 1)}°`;
-    $('landAuto').disabled = st.landDeg == null;
+    $('landO').textContent = I.landLimited ? `${fmt(I.landDeg, 1)}° · moved forward so the leg can reach at push-off`
+      : st.landDeg == null ? `${fmt(I.landDeg, 1)}° · typical` : `${fmt(I.landDeg, 1)}° · typical is ${fmt(I.landTypical, 1)}°`;
+    // contact time and contact length are one setting (length = speed x time); both sliders show the value in use
+    const v = st.run, len = v * I.tc, Lleg = res.leg.legLen;
     $('contact').min = Math.ceil(I.tcMin * 1000); $('contact').max = Math.floor(I.tcMax * 1000); $('contact').value = Math.round(I.tc * 1000);
-    $('contactO').textContent = st.contactMs == null ? `${fmt(I.tc * 1000)} ms · typical` : `${fmt(I.tc * 1000)} ms · typical is ${fmt(I.tcTypical * 1000)} ms`;
-    $('contactAuto').disabled = st.contactMs == null;
-    $('contactHint').textContent = `Range at this speed and cadence: ${fmt(I.tcMin * 1000)}–${fmt(I.tcMax * 1000)} ms. The foot has to pass under the hip, the leg has to reach the ground at push-off with the heel lifted, and only one foot can be down at a time.` +
-      (I.tcLimited ? ` Your setting of ${fmt(st.contactMs)} ms is outside that range, so ${fmt(I.tc * 1000)} ms is used.` : '');
+    $('contactLen').min = Math.ceil(v * I.tcMin * 100) / 100; $('contactLen').max = Math.floor(v * I.tcMax * 100) / 100; $('contactLen').value = Math.round(len * 100) / 100;
+    const nearTyp = st.contact == null && Math.abs(I.tc - I.tcTypical) > 1e-3;
+    $('contactO').textContent = `${fmt(I.tc * 1000)} ms` + (st.contact == null ? (nearTyp ? ' · nearest to typical' : ' · typical') : '');
+    $('contactLenO').textContent = `${fmt(len, 2)} m · ${fmt(len / Lleg, 2)} leg lengths`;
+    const setTo = st.contact == null ? '' : st.contact.kind === 'time' ? `${fmt(st.contact.ms)} ms` : `${fmt(st.contact.m, 2)} m`;
+    $('contactHint').textContent = `Range at this speed, cadence and landing point: ${fmt(I.tcMin * 1000)}–${fmt(I.tcMax * 1000)} ms (${fmt(v * I.tcMin, 2)}–${fmt(v * I.tcMax, 2)} m). Shorter contacts leave the foot ahead of the hip for too much of the step, so braking outweighs propulsion and the runner would slow down; longer ones need more reach than the leg has at push-off, even rolling off the toes; and only one foot can be down at a time.` +
+      (I.tcLimited ? ` Your setting of ${setTo} is outside that range, so ${fmt(I.tc * 1000)} ms (${fmt(len, 2)} m) is used.` : '') +
+      (nearTyp ? ` The typical contact for this speed, ${fmt(I.tcTypical * 1000)} ms (${fmt(I.lenTypical, 2)} m), is outside it.` : '');
     $('realInfo').innerHTML = facts.map(([k, v]) => `<div><span class="k">${k}</span><span class="v">${v}</span></div>`).join('');
     const drag = I.minClear < -DRAG_TOL;
+    $('balanceWarn').classList.toggle('hidden', !I.unbalanced);
+    $('balanceWarn').textContent = I.unbalanced ? `No contact time balances braking and propulsion at these settings, so this isn't steady running. To hold the speed anyway, the model tilts the ground force off the hip, which makes the hip work during contact. ` +
+      (Math.abs(I.landDeg - I.landTypical) > 2 ? `A landing point nearer the typical ${fmt(I.landTypical)}° fixes it.` : `A cadence nearer the typical ${fmt(typicalCadence(st.run))} steps/min fixes it.`) : '';
     $('kneeWarn').classList.toggle('hidden', !drag);
     $('kneeWarn').textContent = drag ? `At this bend the foot would dip about ${fmt(-I.minClear * 100)} cm into the ground in mid-swing. A real runner would trip or have to lift the hip, so bend the knee more.` : '';
     queueSweep();
   }
+  updateMarkers();
   const realRes = real ? res : simulate(opts('real'));
   const rows = [['real', `Realistic stride at ${fmt(st.run, 1)} m/s, knee ${fmt(st.realKnee ?? typicalKnee())}°, landing ${fmt(realRes.info.landDeg, 1)}°, contact ${fmt(realRes.info.tc * 1000)} ms`], ['straight', 'Straight, ±' + st.arc / 2 + '°'], ['fold', `Bend to ${st.bend}°, then straighten`], ['bent', `Stay bent at ${st.bend}°`]];
   $('cmpBody').innerHTML = rows.map(([m, label]) => {
@@ -329,6 +364,26 @@ function recompute() {
     return `<tr class="${m === st.mode ? 'cur' : ''}"><td>${label}</td><td class="n">${fmt(r.mech)} W</td><td class="n">${fmt(r.metab)} W</td><td class="n">${fmt(r.kcalh)}</td></tr>`;
   }).join('');
   drawChart();
+}
+
+// "typical for this speed" arrows under the sliders. A typical value outside the slider's range sits at that end and says so.
+function marker(id, typ, unit, digits, show) {
+  const input = $(id), m = $(id + 'Typ');
+  input.parentElement.classList.toggle('has-typ', show); m.classList.toggle('on', show);
+  if (!show) return;
+  const lo = +input.min, hi = +input.max, f = hi > lo ? (typ - lo) / (hi - lo) : 0.5, fc = Math.min(1, Math.max(0, f));
+  const val = `${fmt(typ, digits)}${unit}`, out = f < -0.002 ? ', below this range' : f > 1.002 ? ', above this range' : '';
+  m.style.setProperty('--f', fc); m.classList.toggle('flip', fc > 0.5);
+  m.textContent = out ? `typical for this speed: ${val}${out}` : 'typical for this speed';
+  m.title = `Typical for this speed: ${val} (measured runners). Click to use it.`;
+}
+function updateMarkers() {
+  const real = isReal(), I = res.info;
+  marker('kneeReal', typicalKnee(), '°', 0, real);
+  marker('land', real ? I.landTypical : 0, '°', 1, real);
+  marker('contact', real ? I.tcTypical * 1000 : 0, ' ms', 0, real);
+  marker('contactLen', real ? I.lenTypical : 0, ' m', 2, real);
+  marker('cadence', typicalCadence(st.run), ' steps/min', 0, real);
 }
 
 function tile(n, k, v, unit, s, cls) {
@@ -339,7 +394,7 @@ function renderTiles() {
   if (isReal() && res.stance) {
     const s = res.stance, tot = res.mech + s.mech, totMet = res.metab + s.metab;
     tile(1, 'Swing phase, both legs', fmt(res.mech), 'W', `moving the legs through the air · ${fmt(res.perStride, 1)} J per stride per leg (hip +${fmt(res.hipPos)} J, knee +${fmt(res.kneePos)} J)`, 'main');
-    tile(2, 'Stance phase, both legs', fmt(s.mech), 'W', `holding up and pushing the body · ${fmt(s.perStep, 1)} J per step (ankle +${fmt(s.anklePos)} J, knee +${fmt(s.kneePos)} J, hip +${fmt(s.hipPos)} J)`, 'stance');
+    tile(2, 'Stance phase, both legs', fmt(s.mech), 'W', `holding up and pushing the body · ${fmt(s.perStep, 1)} J per step (ankle +${fmt(s.anklePos)} J, knee +${fmt(s.kneePos)} J, hip +${fmt(s.hipPos)} J; toes absorb ${fmt(s.toeNeg)} J)`, 'stance');
     tile(3, 'Whole stride', fmt(tot), 'W', `mechanical · swing ${fmt(100 * res.mech / tot)}%, stance ${fmt(100 * s.mech / tot)}% · ${fmt(tot / st.m, 2)} W/kg`, 'total');
     tile(4, 'Food energy burned, whole stride', fmt(totMet), 'W', `≈ ${fmt(totMet * 3600 / 4184)} kcal per hour · swing ${fmt(res.metab)} W + stance ${fmt(s.metab)} W at ${st.eff}% efficiency`);
     return;
@@ -372,11 +427,11 @@ function syncControls() {
   $('runRow').classList.toggle('hidden', !real);
   $('realInfo').classList.toggle('hidden', !real);
   $('kneeRealRow').classList.toggle('hidden', !real);
-  $('landRow').classList.toggle('hidden', !real); $('ankleLegend').classList.toggle('hidden', !real); $('contactRow').classList.toggle('hidden', !real); $('sweepBox').classList.toggle('hidden', !real);
+  $('landRow').classList.toggle('hidden', !real); $('ankleLegend').classList.toggle('hidden', !real); $('contactRow').classList.toggle('hidden', !real);
+  $('contactLenRow').classList.toggle('hidden', !real); $('sweepBox').classList.toggle('hidden', !real);
   const kr = st.realKnee ?? typicalKnee();
   $('kneeReal').value = kr;
   $('kneeRealO').textContent = st.realKnee == null ? `${fmt(kr)}° · typical for this speed` : `${fmt(kr)}° · typical is ${fmt(typicalKnee())}°`;
-  $('kneeAuto').disabled = st.realKnee == null;
   $('modeHint').textContent = {
     real: 'Foot plants on the ground, the body bounces, and the knee follows typical running motion. Swing (leg in the air) and stance (foot on the ground) are measured separately.',
     straight: 'The hip is fixed in the air and the leg swings like a stiff pendulum, forward and back.',
@@ -400,10 +455,14 @@ for (const [id, key] of [['height', 'h'], ['mass', 'm'], ['bend', 'bend'], ['cad
 for (const id of ['gravity', 'share']) $(id).addEventListener('change', e => { st[id] = e.target.checked; recompute(); });
 $('kneeReal').addEventListener('input', e => { st.realKnee = +e.target.value; syncControls(); recompute(); });
 $('land').addEventListener('input', e => { st.landDeg = +e.target.value; syncControls(); recompute(); });
-$('landAuto').addEventListener('click', () => { st.landDeg = null; syncControls(); recompute(); });
-$('contact').addEventListener('input', e => { st.contactMs = +e.target.value; syncControls(); recompute(); });
-$('contactAuto').addEventListener('click', () => { st.contactMs = null; syncControls(); recompute(); });
-$('kneeAuto').addEventListener('click', () => { st.realKnee = null; syncControls(); recompute(); });
+$('contact').addEventListener('input', e => { st.contact = { kind: 'time', ms: +e.target.value }; syncControls(); recompute(); });
+$('contactLen').addEventListener('input', e => { st.contact = { kind: 'length', m: +e.target.value }; syncControls(); recompute(); });
+// the typical-value arrows: click one to go back to the typical value (knee, landing and contact then follow speed again)
+$('kneeRealTyp').addEventListener('click', () => { st.realKnee = null; syncControls(); recompute(); });
+$('landTyp').addEventListener('click', () => { st.landDeg = null; syncControls(); recompute(); });
+$('contactTyp').addEventListener('click', () => { st.contact = null; syncControls(); recompute(); });
+$('contactLenTyp').addEventListener('click', () => { st.contact = null; syncControls(); recompute(); });
+$('cadenceTyp').addEventListener('click', () => { st.cadence = Math.max(120, Math.min(220, 2 * Math.round(typicalCadence(st.run) / 2))); syncControls(); recompute(); });
 $('playBtn').addEventListener('click', () => { st.playing = !st.playing; syncControls(); });
 $('resetBtn').addEventListener('click', () => { Object.assign(st, DEFAULTS); syncControls(); recompute(); });
 
@@ -423,12 +482,10 @@ function legPoints(i, sc, hx, hy) {
   const L = res.leg, K = res.K, th = K.th[i], ps = th - K.ph[i];
   const kx = hx + L.L1 * Math.sin(th) * sc, ky = hy + L.L1 * Math.cos(th) * sc;
   const ax = kx + L.Ls * Math.sin(ps) * sc, ay = ky + L.Ls * Math.cos(ps) * sc;
-  if (K.stance[i] && res.info) {         // planted foot: turns about the heel as it lowers, then about the ball as the heel lifts
-    const gy = hy + K.hipY[i] * sc, fl = L.footLen * sc;
+  if (K.stance[i] && res.info) {         // planted foot: turns about the heel as it lowers, about the ball as the heel lifts, then rolls off the toes
+    const gy = hy + K.hipY[i] * sc;
     const heelx = hx + K.heelX[i] * sc, heely = gy - K.heelZ[i] * sc, ballx = hx + K.ballX[i] * sc, bally = gy - K.ballZ[i] * sc;
-    // toes: flat on the ground once the ball is down, otherwise in line with the sole
-    const toex = K.toesDown[i] ? ballx + 0.30 * fl : ballx + 0.30 * fl * (ballx - heelx) / (0.70 * fl);
-    const toey = K.toesDown[i] ? gy : bally + 0.30 * fl * (bally - heely) / (0.70 * fl);
+    const toex = hx + K.toeX[i] * sc, toey = gy - K.toeZ[i] * sc;
     return { kx, ky, ax, ay, heelx, heely, ballx, bally, toex, toey, stance: true };
   }
   const p = res.info ? K.footPitch[i] : -ps;               // foot pitch, toe-down positive
@@ -539,10 +596,11 @@ function drawChart() {
   let series, unit;
   const A0 = S.Pa ? Array.from(S.Pa, v => isFinite(v) ? v : 0) : null;
   if (st.chart === 'power') { unit = 'W'; series = [['Hip', S.Ph, C.hip, []], ['Knee', S.Pk, C.knee, []]];
-    if (S.Pa) series.push(['Ankle (stance)', S.Pa, C.ankle, []]);
-    series.push([S.Pa ? 'All joints' : 'Hip + knee', Array.from(S.Ph, (v, k) => v + S.Pk[k] + (A0 ? A0[k] : 0)), C.total, [4, 4]]); }
+    if (S.Pa) series.push(['Ankle (stance)', S.Pa, C.ankle, []], ['Toes (stance)', S.Pm, C.muted, []]);
+    const M0 = S.Pm ? Array.from(S.Pm, v => isFinite(v) ? v : 0) : null;
+    series.push([S.Pa ? 'All joints' : 'Hip + knee', Array.from(S.Ph, (v, k) => v + S.Pk[k] + (A0 ? A0[k] : 0) + (M0 ? M0[k] : 0)), C.total, [4, 4]]); }
   else if (st.chart === 'torque') { unit = 'N·m'; series = [['Hip (+ swings forward)', S.tauH, C.hip, []], ['Knee (+ straightens)', S.tauK, C.knee, []]];
-    if (S.tauA) series.push(['Ankle (+ lifts the toes)', S.tauA, C.ankle, []]); }
+    if (S.tauA) series.push(['Ankle (+ lifts the toes)', S.tauA, C.ankle, []], ['Toe joint (+ lifts the toes)', S.tauM, C.muted, []]); }
   else { unit = '°'; series = [['Thigh angle (+ forward)', Array.from(K.th, v => v * 180 / Math.PI), C.hip, []], ['Knee bend', Array.from(K.ph, v => v * 180 / Math.PI), C.knee, []]]; }
   let lo = Infinity, hi = -Infinity; for (const s of series) for (const v of s[1]) { if (!isFinite(v)) continue; if (v < lo) lo = v; if (v > hi) hi = v; }
   lo = Math.min(lo, 0); hi = Math.max(hi, 0); if (hi - lo < 1e-6) { hi += 1; lo -= 1; }

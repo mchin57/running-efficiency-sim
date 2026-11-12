@@ -10,7 +10,8 @@ Open `index.html` in a browser. It is a single self-contained file with no build
 - **Leg motion:**
   - *Realistic stride:* the foot plants on the ground, the body bounces, and the knee follows typical running motion
   - *Straight*, *Bend, then straighten*, *Stay bent:* the hip hangs in the air and the leg swings like a pendulum
-- **Realistic stride controls:** running speed, cadence, peak knee bend in swing, landing point (degrees in front of the hip) and ground contact time
+- **Realistic stride controls:** running speed, cadence, peak knee bend in swing, landing point (degrees in front of the hip), and ground contact time and ground contact length (one setting shown both ways: length = speed × time; set either, and that one stays put when speed changes)
+- **Typical values for the speed:** an arrow under the knee-bend, landing, contact and cadence sliders marks the typical value for the current speed (from measured runners); click it to use that value
 - **Physics:** gravity, whether hip and knee can share energy, tendon energy return, muscle efficiency
 
 The page shows swing power, stance power, the whole-stride total and food energy. It also has live joint power readouts, power, torque and angle charts over one stride, and a chart of swing cost against knee bend that marks where the foot would drag.
@@ -29,23 +30,35 @@ In the realistic stride, the hip's vertical acceleration acts on the swinging le
 
 **Body motion.** The vertical ground force is a spring-mass pulse that supports body weight over each step, `F/m = Fpk·[sin(πs) + κ·sin(2πs)]` for `s` from 0 to 1 through the contact and zero in the air. The `κ` term shifts the force earlier or later without changing its impulse. The body's height comes from that force in closed form and repeats every step, so the drawn hip, the swinging leg and the planted leg all share one motion that obeys F = ma.
 
-**Stance (quasi-static).** The ground force acts at the centre of pressure: under the heel while the foot lowers, moving to the ball while it is flat, and on the ball while the heel lifts. It points from there at the hip, and `κ` is chosen so braking and propulsion cancel over each contact (steady speed). Hip, knee and ankle moments come from that force with the leg treated as weightless. Because the force passes through the hip, the hip does no work in stance; all modelled hip work is in the swing. Summed joint power equals the power the force delivers to the body, and the body ends each step with the energy it started with.
+**Stance (quasi-static).** The ground force acts at the centre of pressure: under the heel while the foot lowers, moving to the ball while it is flat, out along the flat toes to the tip while the heel lifts, and on the tip while the toes roll. It points from there at the hip, and `κ` is chosen so braking and propulsion cancel over each contact (steady speed). `κ` can't go past ±0.5 (the force would go negative), so contact times where no `κ` balances are left out of the allowed contact-time range. Likewise, if the leg can't reach the ground at push-off even with the shortest contact, the landing point moves forward until it can. If no contact time balances with the chosen landing point, the force is tilted off the hip instead and the page flags it as not steady running. Hip, knee, ankle and toe-joint moments come from that force with the leg treated as weightless. Because the force passes through the hip, the hip does no work in stance (except in flagged settings); all modelled hip work is in the swing. Summed joint power equals the power the force delivers to the body, and the body ends each step with the energy it started with.
 
-**Realistic stride geometry.** The foot is rigid and never slides. It lands on the heel with the toes 12° up and the knee at 20°, lowers flat, then rolls over the ball as the heel lifts (up to 65°). During contact the knee and thigh angles are whatever the leg needs to reach from the hip to the ankle. The foot lowers at the rate that gives a typical knee speed (300°/s) just after landing. The heel lifts just enough to keep the knee from straightening past a floor that ends near 22° at toe-off. Swing curves match each joint's angle and speed at toe-off and touchdown. If the foot would hit the ground on its way in to landing, the knee stays bent a little longer before touchdown.
+**Realistic stride geometry.** The foot (a rigid rearfoot plus toes, the front 30%) never slides. It lands on the heel with the toes 12° up and the knee at 20°, lowers flat, then the rearfoot turns about the ball as the heel lifts (up to 65°) while the pressure moves out to the toe tip. If the leg still can't reach, the toes roll up about their tip (up to 45°), as far as needed. Rolling off the toes is what lets contact reach realistic lengths. The toe joint mostly absorbs energy as it bends (about 25 J per step at 3 m/s). During contact the knee and thigh angles are whatever the leg needs to reach from the hip to the ankle. The foot lowers at the rate that gives a typical knee speed (300°/s) just after landing. The heel starts to lift at 45% of contact, or earlier if, after its deepest bend, the knee would straighten past 30°; it lifts just enough to keep the knee from straightening past a floor that ends near 22° at toe-off. Swing curves match each joint's angle and speed at toe-off and touchdown, the toe-off speeds taken from inside the contact; in between, the thigh swings forward to a measured, speed-dependent peak (see below) and the knee to a peak bend of 60° + 12°·v (capped at 130°). If the foot would scuff the ground on its way in to landing, the thigh swings up to 15° further forward, which lifts the foot.
+
+**Typical values.** The defaults for landing point and contact, and the arrows on the sliders, follow measured runners at 3.1–10 m/s (Clark, Meng & Stearne 2020): thigh angle at touchdown 0.033·v + 0.335 rad (which sets the landing point, about 13–19° from 3 to 6 m/s), contact time 0.78·v^−0.89 s scaled with height from a 1.75 m runner, step rate 0.31·v + 1.58 steps/s, and peak forward thigh swing 0.102·v + 0.273 rad. Cadence defaults to 180 steps/min rather than the typical value; its arrow shows the typical one. Contact can't always reach the typical value: at 3 m/s braking and propulsion stop balancing at 259 ms (typical 293 ms), so the model uses the nearest it can; from about 5 m/s it matches.
 
 ## How it compares with lab data (average man, 3 m/s, 180 spm)
 
 | Measure | Model | Published |
 |---|---|---|
-| Total mechanical work | 4.8 W/kg | 0.40–0.50 kcal/kg/km ≈ 5.0–6.3 W/kg (Cavagna) |
-| Work moving the body | 3.2 W/kg (stance) | 0.25 kcal/kg/km ≈ 3.1 W/kg (Cavagna) |
-| Work moving the limbs | 1.6 W/kg (legs only) | ≈ 2.4 W/kg incl. arms (Cavagna et al. 1997 equation) |
-| Joint shares of positive work | ankle 33%, hip 30%, knee 37% | ankle 47%, hip 32% at 2 m/s (Farris & Sawicki 2012) |
-| Net metabolic cost | 19.2 W/kg with no tendon return | ≈ 11–12 W/kg (≈ 3.7–4 J/kg/m) |
+| Total mechanical work | 4.7 W/kg | 0.40–0.50 kcal/kg/km ≈ 5.0–6.3 W/kg (Cavagna) |
+| Work moving the body | 2.9 W/kg (stance) | 0.25 kcal/kg/km ≈ 3.1 W/kg (Cavagna) |
+| Work moving the limbs | 1.8 W/kg (legs only) | ≈ 2.4 W/kg incl. arms (Cavagna et al. 1997 equation) |
+| Joint shares of positive work | ankle and toes 41%, hip 29%, knee 30% | ankle 47%, hip 32% at 2 m/s (Farris & Sawicki 2012) |
+| Net metabolic cost | 18.8 W/kg with no tendon return | ≈ 11–12 W/kg (≈ 3.7–4 J/kg/m) |
 
-The mechanical work lines up well, a little under Cavagna's total. Food energy is well above measured costs with no tendon return, because real running recycles energy elastically. About 40% tendon return matches measured costs. Leg swing's share of the cost is 33% at 3 m/s and 20–24% from 4 to 6 m/s, at or above the high end of lab estimates (7–26%). The knee does more of the work than in the lab data, and the hip does none of its work in stance (see above).
+The mechanical work lines up well, a little under Cavagna's total. Food energy is well above measured costs with no tendon return, because real running recycles energy elastically. About 40% tendon return matches measured costs. Leg swing's share of the cost is 38% at 3 m/s and 32–33% from 4 to 6 m/s at 180 steps/min, above the high end of lab estimates (7–26%); at the cadences runners actually use at 3 m/s it is far lower. The hip does none of its work in stance (see above).
 
-Two known limits. Swing cost barely grows above 3 m/s (about 115–145 W), whereas real swing cost rises with speed: the thigh's range in swing is set by the landing and push-off positions, which scale with leg length rather than speed. Ankle work matches measured values at 5 m/s (1.3 J/kg) but keeps rising beyond that, whereas measured ankle work levels off.
+**Swing and speed.** With the thigh's forward swing from the measured fit and contact close to measured, the thigh's motion matches the same study well: at its step rates, the peak backward swing is 19–28° against 24–28° measured (matching from 4 m/s up), the total thigh range is within 2° of measured from 3.5 m/s up, and the average thigh angular speed is within 7%. At those step rates swing cost rises steeply with speed: about 60 W at 3 m/s, 125 W at 4, 240 W at 5 and 420 W at 6. At a fixed 180 steps/min it rises less (about 160 W at 3 m/s to 240 W at 6), because shorter ground contact at speed leaves the leg more time to swing. Below 3 m/s the measured forward-swing fit drops under the touchdown thigh angle, so the peak is held 4° past touchdown instead.
+
+Ankle work matches measured values at 5 m/s (1.3 J/kg) but keeps rising beyond that, whereas measured ankle work levels off.
+
+## Read with care
+
+The physics is checked (see `tests/check.js`), but three simplifications skew particular conclusions:
+
+- **Joint shares.** The ground force is aimed through the hip, so the hip does no stance work and the knee and ankle do it all. Real hip muscles do a good share of stance work, so the knee and ankle look more important here than they are, with peak knee and ankle moments roughly 40–65% above measured values. Whole-stride totals are less affected than the split between joints.
+- **Cadence and swing.** The swing leg follows a set path, so a higher cadence covers the same path in less time and swing work climbs very steeply. Measured limb-moving work rises much more gently with step rate: the direction is right, the size is exaggerated.
+- **Food energy.** One muscle efficiency (25% by default) converts all positive work, and braking work is free. Measured running looks far more efficient (apparent efficiencies of about 45–70% have been reported, Cavagna & Kaneko 1977, largely from tendon recoil), and braking does cost some energy. Hence the ~40% tendon return needed to match measured costs. Comparisons between settings are more trustworthy than absolute calories.
 
 ## Development
 
@@ -65,6 +78,8 @@ node tests/check.js   # sanity checks: known results, energy balance, geometry, 
 - de Leva P. (1996). Adjustments to Zatsiorsky-Seluyanov's segment inertia parameters. *J Biomech* 29(9).
 - Winter D.A. *Biomechanics and Motor Control of Human Movement.*
 - Cavagna G.A. et al. Mechanical work in running; Cavagna, Mantovani, Willems & Musch (1997), *Pflügers Arch* 434.
+- Cavagna G.A., Kaneko M. (1977). Mechanical work and efficiency in level walking and running. *J Physiol* 268(2).
+- Clark K.P., Meng C.R., Stearne D.J. (2020). 'Whip from the hip': thigh angular motion, ground contact mechanics, and running speed. *Biology Open* 9(10), bio053546.
 - Schache A.G., Brown N.A.T., Pandy M.G. (2015). *J Exp Biol* 218(15).
 - Farris D.J., Sawicki G.S. (2012). *J R Soc Interface* 9(66).
 - Modica J.R., Kram R. (2005). *J Appl Physiol* 98(6); Arellano C.J., Kram R. (2014). *Integr Comp Biol* 54(6).
