@@ -3,8 +3,10 @@
 from pathlib import Path
 
 root = Path(__file__).parent
-template = (root / "src" / "template.html").read_text()
-physics = (root / "src" / "physics.js").read_text()
+# Read and write as UTF-8 explicitly: the sources contain characters such as θ and ₁, and without this Python on
+# Windows (before 3.15) falls back to the cp1252 code page and fails.
+template = (root / "src" / "template.html").read_text(encoding="utf-8")
+physics = (root / "src" / "physics.js").read_text(encoding="utf-8")
 assert "/*PHYSICS*/" in template, "template is missing the /*PHYSICS*/ placeholder"
-(root / "index.html").write_text(template.replace("/*PHYSICS*/", physics))
+(root / "index.html").write_text(template.replace("/*PHYSICS*/", physics), encoding="utf-8", newline="\n")
 print("Wrote index.html")
