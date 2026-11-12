@@ -60,6 +60,11 @@ The physics is checked (see `tests/check.js`), but three simplifications skew pa
 - **Cadence and swing.** The swing leg follows a set path, so a higher cadence covers the same path in less time and swing work climbs very steeply. Measured limb-moving work rises much more gently with step rate: the direction is right, the size is exaggerated.
 - **Food energy.** One muscle efficiency (25% by default) converts all positive work, and braking work is free. Measured running looks far more efficient (apparent efficiencies of about 45–70% have been reported, Cavagna & Kaneko 1977, largely from tendon recoil), and braking does cost some energy. Hence the ~40% tendon return needed to match measured costs. Comparisons between settings are more trustworthy than absolute calories.
 
+Also known and not yet fixed:
+
+- **Force timing.** The vertical ground force peaks at 33–37% of contact, against about 43% measured (its force-weighted centre is about 45%). At typical settings the timing shift sits at or near its limit.
+- **Push-off.** The heel lifts about 63° at toe-off, against about 40–49° measured. The final pressure point is the toe tip, whereas measured pressure ends under the big-toe pad, about 85% of the way along the foot.
+
 ## Development
 
 The page is built from two source files:
