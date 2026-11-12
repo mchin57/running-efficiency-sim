@@ -100,7 +100,23 @@ for (const [v, tol] of [[3, 15], [6, 3]]) {
   near('contact set as 0.8 m at 4 m/s vs as 200 ms: stance power difference, W', b.stance.mech - a.stance.mech, 0, 0.01, 3);
   const s = simulate({ ...man, mode: 'real', speed: 6 });
   below('toe joint is part of the energy balance at 6 m/s (toe roll in use), %', s.stance.balanceErr * 100, 0.01);
-  near('typical cadence at 3 m/s, steps/min', typicalCadence(3), 150.6, 0.1);
+  near('typical cadence at 3 m/s, steps/min (recreational runners, Fukuchi et al. 2017)', typicalCadence(3), 166.7, 0.1);
+}
+{ // the toes carry no moment until the pressure is on them (in front of the ball)
+  const s = simulate({ ...man, mode: 'real', speed: 3 }), K = s.K; let m = 0;
+  for (let i = 0; i < s.N; i++) if (K.stance[i] && K.copX[i] <= K.ballX[i]) m = Math.max(m, Math.abs(s.S.tauM[i]));
+  below('toe-joint moment while the pressure is behind the ball, N m', m, 1e-9, 3);
+}
+{ // the heel-lift start moves smoothly with contact time (it used to snap to a grid, breaking the balance search)
+  const o = { ...man, sex: 'male', H: 1.5, M: 56.25, mode: 'real', speed: 2, cadence: 220, landDeg: 0 }, L = legModel('male', 1.5, 56.25);
+  const starts = [114, 115, 116, 117].map(ms => realisticPlan({ ...o, contactMs: ms }, L, 120 / 220).liftStart);
+  const distinct = new Set(starts.map(x => x.toFixed(9))).size;
+  if (distinct < 4) failures++;
+  console.log(`${distinct < 4 ? 'FAIL' : 'ok  '} heel-lift start changes smoothly with contact time (${distinct} distinct of 4)`);
+  near('that setting at 115.5 ms balances (skew solves)', realisticPlan({ ...o, contactMs: 115.5 }, L, 120 / 220).unbalanced ? 1 : 0, 0, 0, 0);
+  const d = simulate({ ...man, mode: 'real', speed: 3 }).info;
+  if (d.minWhy !== 'balance' || d.maxWhy !== 'balance') failures++;
+  console.log(`${d.minWhy === 'balance' && d.maxWhy === 'balance' ? 'ok  ' : 'FAIL'} default contact range is set by balance at both ends (${d.minWhy}, ${d.maxWhy})`);
 }
 { // at the cadence measured for each speed, the typical stride balances (no warning) from 2 to 6 m/s
   let flagged = [];

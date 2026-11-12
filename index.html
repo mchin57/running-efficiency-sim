@@ -275,13 +275,13 @@ power = torque × joint angular velocity</pre>
         <li>Lower leg and foot move as one rigid piece; the foot's mass sits just below the ankle.</li>
         <li>Cadence counts steps per minute, both feet. Each leg makes cadence ÷ 120 strides per second.</li>
         <li>Simple modes: the hip does not move and nothing touches the ground.</li>
-        <li>Typical values for this speed (the arrows under the sliders) come from measured runners at 3.1–10 m/s (Clark, Meng &amp; Stearne 2020): the thigh's angle at touchdown sets the landing point (about 13–19° from 3 to 6 m/s), contact time is 0.78 × speed<sup>−0.89</sup> seconds, scaled with height (about 0.95–1.0 leg lengths of travel), and step rate is 0.31 × speed + 1.58 per second. Click an arrow to use that value. At slow speeds the model can't quite reach the typical contact length: braking and propulsion stop balancing first, so it uses the nearest it can.</li>
+        <li>Typical values for this speed (the arrows under the sliders) come from measured runners. From runners at 3.1–10 m/s (Clark, Meng &amp; Stearne 2020): the thigh's angle at touchdown sets the landing point (about 13–19° from 3 to 6 m/s), and contact time is 0.78 × speed<sup>−0.89</sup> seconds, scaled with height (about 0.95–1.0 leg lengths of travel). Cadence is 133.9 + 10.9 × speed steps per minute, fitted to 28 recreational runners at 2.5–4.5 m/s (Fukuchi et al. 2017). Click an arrow to use that value. At slow speeds the model can't quite reach the typical contact length: braking and propulsion stop balancing first, so it uses the nearest it can (published contact times differ a lot between studies at these speeds, and the model's falls within that spread).</li>
         <li>Foot: the heel strikes with the toes 12° up and the foot is flat by 15% of the contact. The heel starts to lift at about 45% of the contact (earlier if, after its deepest bend, the knee would otherwise straighten past 30°) and can lift up to 65°, while the pressure moves out to the toe tip. The toes (the front 30% of the foot) then roll up about their tip, up to 45°, only as far as the leg needs to reach. The toe joint mostly absorbs energy as it bends. The pelvis does not tilt or rotate.</li>
         <li>The swinging leg's foot is lumped with the shin, so the ankle only appears during stance.</li>
-        <li>Peak forward thigh swing: 0.102 × speed + 0.273 radians from vertical (Clark, Meng &amp; Stearne 2020, runners at 3.1–10 m/s), and at least 4° past the touchdown angle. Cadence stays where you set it; runners in that study raised their step rate with speed (about 150 steps/min at 3 m/s, 205 at 6 m/s, shown by the cadence arrow), which makes swing cost climb much faster with speed than it does at a fixed cadence.</li>
+        <li>Peak forward thigh swing: 0.102 × speed + 0.273 radians from vertical (Clark, Meng &amp; Stearne 2020, runners at 3.1–10 m/s), and at least 4° past the touchdown angle. Cadence stays where you set it; real runners raise it with speed (the cadence arrow: about 167 steps/min at 3 m/s and 199 at 6 m/s), which makes swing cost climb faster with speed than it does at a fixed cadence.</li>
         <li>In stance, real tendons (especially the Achilles) store braking work and give much of it back. About 40% tendon energy return brings the whole-stride food energy in line with measured running costs (roughly 3.7–4 J per kg per metre).</li>
         <li>Contact time and contact length are one setting (length = speed × time): set either, and the one you set stays put when you change speed. Setting it, or the landing point, moves the push-off point. Shorter contact means a harder push from the ground, since the same body weight has to be supported in less time.</li>
-        <li><strong>Read joint shares with care.</strong> The ground force is aimed through the hip, so in this model the hip does no work while the foot is down and the knee and ankle do all of it. In real runners the force line passes a little in front of and behind the hip and the hip muscles do a good share of stance work, so here the knee and ankle look more important than they are, with peak knee and ankle moments roughly 40–65% above measured values. Whole-stride totals are less affected than the split between joints.</li>
+        <li><strong>Read joint shares with care.</strong> The ground force is aimed through the hip, so in this model the hip does no work while the foot is down and the knee and ankle do all of it. In real runners the force line passes a little in front of and behind the hip and the hip muscles do a good share of stance work, so here the knee and ankle look more important than they are, with peak knee moments about 1.4–1.7 times measured values and peak ankle moments 25–55% above them. Whole-stride totals are less affected than the split between joints.</li>
         <li><strong>Cadence matters too much for swing.</strong> The swing leg follows a set path, so a higher cadence means the same path in less time, and swing work climbs very steeply. Measured limb-moving work rises much more gently with step rate. The direction is right; the size of the effect is exaggerated.</li>
         <li><strong>Food energy is a rough conversion.</strong> All positive work is converted at one muscle efficiency (25% by default) and braking work is treated as free. Measured running looks far more efficient than 25% (apparent efficiencies of about 45–70% have been reported, largely thanks to tendon recoil), and braking work does cost some energy. That is why about 40% tendon return is needed to match measured costs. Comparisons between settings are more trustworthy than the absolute calories.</li>
         <li>All knee motion is driven by muscle. Real runners get much of the knee bend for free from push-off and whip-like coupling with the thigh, so measured costs are lower than <em>Bend, then straighten</em> shows here.</li>
@@ -349,18 +349,19 @@ function blankK(N) {
 // are whatever geometry makes the leg reach from the hip down to the ankle. The foot lowers at the rate that makes the
 // knee bend at a typical speed just after touchdown; later the heel lifts just enough to stop the knee straightening past
 // a floor that ends near 22 degrees at toe-off.
-// Typical values for a speed v (m/s) come from measured running (Clark, Meng & Stearne 2020, 154 trials at 3.1-10 m/s):
+// Typical values for a speed v (m/s) come from measured running. Clark, Meng & Stearne 2020 (154 trials at 3.1-10 m/s):
 // thigh angle at touchdown 0.033 v + 0.335 rad, contact time 0.78 v^-0.89 s (scaled with height from a 1.75 m runner),
-// step rate 0.31 v + 1.58 steps/s, peak swing thigh flexion 0.102 v + 0.273 rad.
+// peak swing thigh flexion 0.102 v + 0.273 rad. Cadence: a straight-line fit, 133.9 + 10.9 v steps/min, to 28 recreational
+// runners at 2.5, 3.5 and 4.5 m/s (Fukuchi et al. 2017, Table 4: 80.8, 85.7 and 91.7 strides/min).
 const REAL = { kneeTD: 20, kneeTO: 22, kneeMinTO: 10, kneeRateTD: 300, kneeRateTOMax: 600,
                strikeDeg: 12, flatAt: 0.15, rollStart: 0.45, liftKnee: 30, copMin: 0.10, holdAt: 0.85, rollMax: 65, skewMax: 0.5,
                toeLen: 0.30, tipAt: 0.6, toeRollMax: 45,           // toes are 30% of the foot; pressure reaches the tip 60% into the lift
-               thighTD: [0.033, 0.335], contactTime: [0.78, -0.89], refHeight: 1.75, stepRate: [0.31, 1.58],
+               thighTD: [0.033, 0.335], contactTime: [0.78, -0.89], refHeight: 1.75, cadence: [10.92, 133.9],
                thighFlex: [0.102, 0.273], retractMin: 4,   // peak swing thigh flexion = 0.102 v + 0.273 rad (v in m/s)
                termKnee: 14, clearBoostMax: 15 };          // knee bend at 88% of swing; most extra thigh swing for foot clearance
 const sstep = s => { s = Math.min(1, Math.max(0, s)); return s * s * s * (s * (6 * s - 15) + 10); };
 // typical cadence (steps per minute, both feet) at speed v
-function typicalCadence(v) { return 60 * (REAL.stepRate[0] * v + REAL.stepRate[1]); }
+function typicalCadence(v) { return REAL.cadence[0] * v + REAL.cadence[1]; }
 
 // Everything about the stride that does not depend on the late-swing knee bend: contact timing, ground force,
 // body motion and the stance-leg geometry.
@@ -407,13 +408,22 @@ function realisticPlan(o, leg, T) {
   // The heel starts to lift at 45% of contact, or earlier if the flat-foot knee, once it has passed its deepest bend and is
   // straightening again, would straighten past 30 degrees first. The centre of pressure gets at least 10% of the contact
   // to travel from heel to ball before the heel can lift.
+  // (Every step is continuous in the inputs, so the force skew that depends on it is too: the deepest bend is located
+  // exactly, not snapped to the search grid.)
   const liftStart = (tc, mo) => {
     const t0 = tFlat * tc, t1 = REAL.rollStart * tc, lim = REAL.liftKnee * D, n = 40, at = j => t0 + (t1 - t0) * j / n;
-    let jPk = 0; for (let j = 1; j <= n; j++) if (kneeFlat(mo, at(j)) > kneeFlat(mo, at(jPk))) jPk = j;   // deepest bend
+    const kn = t => kneeFlat(mo, t);
+    let jPk = 0; for (let j = 1; j <= n; j++) if (kn(at(j)) > kn(at(jPk))) jPk = j;
+    // refine the deepest bend between the neighbouring grid points (golden-section search)
+    let a = at(Math.max(0, jPk - 1)), b = at(Math.min(n, jPk + 1));
+    const gr = (Math.sqrt(5) - 1) / 2;
+    for (let it = 0; it < 60; it++) { const c = b - gr * (b - a), d = a + gr * (b - a); if (kn(c) > kn(d)) b = d; else a = c; }
+    const tPk = Math.min(t1, Math.max(t0, (a + b) / 2));
     let tR = t1;
-    for (let j = jPk; j <= n; j++) if (kneeFlat(mo, at(j)) <= lim) {
-      let lo = at(Math.max(jPk, j - 1)), hi = at(j);
-      for (let it = 0; it < 40; it++) { const m = (lo + hi) / 2; if (kneeFlat(mo, m) <= lim) hi = m; else lo = m; }
+    if (kn(tPk) <= lim) tR = tPk;               // already straighter than 30 degrees at its deepest: lift as it starts to straighten
+    else for (let j = jPk; j <= n; j++) if (at(j) > tPk && kn(at(j)) <= lim) {
+      let lo = Math.max(tPk, at(j - 1)), hi = at(j);
+      for (let it = 0; it < 50; it++) { const m = (lo + hi) / 2; if (kn(m) <= lim) hi = m; else lo = m; }
       tR = hi; break;
     }
     return Math.min(t1, Math.max(tR, t0 + REAL.copMin * tc));
@@ -439,12 +449,13 @@ function realisticPlan(o, leg, T) {
       const need = i2 !== 0 ? -i1 / i2 : Infinity;
       return { kap, need, mo, tR, g: need - kap };
     };
-    const pts = [-1, -0.5, 0, 0.5, 1].map(f => ev(f * cap)), mid = pts[2];
+    const NK = 8, pts = Array.from({ length: NK + 1 }, (_, j) => ev((2 * j / NK - 1) * cap)), mid = pts[NK / 2];
     // the bracket (sign change of need - kappa) nearest zero skew
     let br = null;
-    for (const [i, j] of [[2, 3], [1, 2], [3, 4], [0, 1]]) if (isFinite(pts[i].g) && isFinite(pts[j].g) && pts[i].g * pts[j].g <= 0) { br = [pts[i], pts[j]]; break; }
+    const order = Array.from({ length: NK }, (_, j) => j).sort((p, q) => Math.abs(p + 0.5 - NK / 2) - Math.abs(q + 0.5 - NK / 2));
+    for (const i of order) if (isFinite(pts[i].g) && isFinite(pts[i + 1].g) && pts[i].g * pts[i + 1].g <= 0) { br = [pts[i], pts[i + 1]]; break; }
     if (!br) {   // no balance: use the limit on the side the need points to
-      const end = mid.need >= 0 ? pts[4] : pts[0];
+      const end = mid.need >= 0 ? pts[NK] : pts[0];
       return { kap: end.kap, need: isFinite(end.need) && Math.abs(end.need) > cap ? end.need : Math.sign(mid.need || 1) * Infinity, mo: end.mo, tR: end.tR };
     }
     let [lo, hi] = br, best = Math.abs(lo.g) < Math.abs(hi.g) ? lo : hi;
@@ -493,9 +504,9 @@ function realisticPlan(o, leg, T) {
   // set (within the limits); the landing point stays where it is, so the push-off point moves.
   const lenTypical = REAL.contactTime[0] * v ** (REAL.contactTime[1] + 1) * leg.legLen / (0.53 * REAL.refHeight);
   const tcTyp = lenTypical / v;
-  const tcWanted = o.contactMs != null ? o.contactMs / 1000 : o.contactLen != null ? o.contactLen / v : Math.min(tcTyp, 0.9 * Ts);
+  const tcWanted = o.contactMs != null ? o.contactMs / 1000 : o.contactLen != null ? o.contactLen / v : tcTyp;
   // stretches of contact time that balance, found on a grid and refined at their edges
-  const NG = 24, grid = Array.from({ length: NG + 1 }, (_, j) => reachMin + (reachMax - reachMin) * j / NG), ok = grid.map(balances);
+  const NG = 40, grid = Array.from({ length: NG + 1 }, (_, j) => reachMin + (reachMax - reachMin) * j / NG), ok = grid.map(balances);
   const edge = (good, bad) => { for (let it = 0; it < 12; it++) { const m = (good + bad) / 2; if (balances(m)) good = m; else bad = m; } return good; };
   const ranges = [];
   for (let j = 0; j <= NG; j++) if (ok[j] && (j === 0 || !ok[j - 1])) {
@@ -508,6 +519,11 @@ function realisticPlan(o, leg, T) {
     const dist = r => tcWanted < r[0] ? r[0] - tcWanted : tcWanted > r[1] ? tcWanted - r[1] : 0;
     [tcMin, tcMax] = ranges.reduce((b, r) => dist(r) < dist(b) ? r : b);
   }
+  // which limit sets each end of the range, for the page: 'pass' (the foot has to get behind the hip), 'min' (60 ms floor),
+  // 'balance' (braking and propulsion stop cancelling), 'reach' (the leg can't reach at push-off), 'air' (both feet down)
+  const near = (x, y) => Math.abs(x - y) < 1e-6;
+  const minWhy = !unbalanced && tcMin > reachMin + 1e-6 ? 'balance' : near(reachMin, 0.06) ? 'min' : 'pass';
+  const maxWhy = !unbalanced && tcMax < reachMax - 1e-6 ? 'balance' : reachMax < 0.95 * Ts - 1e-6 ? 'reach' : 'air';
   const tc = Math.max(tcMin, Math.min(tcMax, tcWanted));
   const userSet = o.contactMs != null || o.contactLen != null;
   const tcLimited = userSet && Math.abs(tc - tcWanted) > 5e-4 ? (tc > tcWanted ? 'min' : 'max') : null;
@@ -593,7 +609,7 @@ function realisticPlan(o, leg, T) {
   }
   let fMax = 0, fAt = 0;
   for (let j = 0; j <= 400; j++) { const s = j / 400, f = Math.sin(Math.PI * s) + kap * Math.sin(2 * Math.PI * s); if (f > fMax) { fMax = f; fAt = s; } }
-  return { v, Ts, tc, tf, Tsw, a, ball, sole, landDeg, landTypical, landLimited, tcTypical: tcTyp, lenTypical, tcMin, tcMax, tcLimited, unbalanced,
+  return { v, Ts, tc, tf, Tsw, a, ball, sole, landDeg, landTypical, landLimited, tcTypical: tcTyp, lenTypical, tcMin, tcMax, minWhy, maxWhy, tcLimited, unbalanced,
            kap, roll, toeRoll: toeTO, strike: b0, yTD, yTO, vTD: mo.vTD, vTO: mo.vTO,
            liftStart: tR / tc, peakGRF: mo.Fpk * fMax / G, forcePeakAt: fAt, copAt: tau => copAt(tau, tc, tR), stanceAt, hip };
 }
@@ -678,7 +694,7 @@ function realisticCore(o, leg, T, N, P, clearBoost) {
   K.info = { tc, tf, Tsw, stepLen: v * P.Ts, peakGRF: P.peakGRF, forcePeakAt: P.forcePeakAt, skew: P.kap, rollDeg: P.roll / D, strikeDeg: P.strike / D,
              kneeLoadDeg: kneeLoad / D, kneeTODeg: TO.ph[0] / D, kneeRateTD: TD.ph[1] / D, kneeRateTO: TO.ph[1] / D, reachShort: short,
              bob: yMax - yMin, hipMax: yMax, phMaxDeg: phMax, phTypical, minClear, lateClear, clearBoost, thighPeakDeg: thMax / D, a: P.a, ball: P.ball,
-             landDeg: P.landDeg, landTypical: P.landTypical, landLimited: P.landLimited, contactLen: v * tc, tcTypical: P.tcTypical, lenTypical: P.lenTypical, toeRollDeg: P.toeRoll / D, tcMin: P.tcMin, tcMax: P.tcMax,
+             landDeg: P.landDeg, landTypical: P.landTypical, landLimited: P.landLimited, contactLen: v * tc, tcTypical: P.tcTypical, lenTypical: P.lenTypical, toeRollDeg: P.toeRoll / D, tcMin: P.tcMin, tcMax: P.tcMax, minWhy: P.minWhy, maxWhy: P.maxWhy,
              tcLimited: P.tcLimited, unbalanced: P.unbalanced, pushBehind: v * tc - P.a };
   return K;
 }
@@ -804,7 +820,9 @@ function simulate(o) {
       const axp = K.footX[i], ayp = K.ankleZ[i], cx = K.copX[i];
       const cross = (rx, ry) => -(rx * Fy - ry * Fx);        // moment on the distal part from the proximal one: -(r_cop - r_joint) x F
       const Mh = cross(cx - 0, 0 - hipY), Mk = cross(cx - kx, 0 - ky), Ma = cross(cx - axp, 0 - ayp);
-      const Mm = cross(cx - K.ballX[i], 0 - K.ballZ[i]);     // toe joint (ball of the foot): moment on the toes from the rearfoot
+      // toe joint (ball of the foot): moment on the toes from the rearfoot. The toes only carry load once the pressure is
+      // on them; while it is on the heel or the rearfoot they are unloaded.
+      const Mm = cx > K.ballX[i] + 1e-9 ? cross(cx - K.ballX[i], 0 - K.ballZ[i]) : 0;
       const wT = K.thd[i], wS = K.thd[i] - K.phd[i], wF = K.footAngRate[i], wToe = K.toeAngRate[i];
       const Ph = Mh * wT, Pk = Mk * (wS - wT), Pa = Ma * (wF - wS), Pm = Mm * (wToe - wF);
       S.tauH[i] = Mh; S.tauK[i] = Mk; S.tauA[i] = Ma; S.tauM[i] = Mm; S.Ph[i] = Ph; S.Pk[i] = Pk; S.Pa[i] = Pa; S.Pm[i] = Pm;
@@ -879,20 +897,20 @@ function recompute() {
       : st.landDeg == null ? `${fmt(I.landDeg, 1)}° · typical` : `${fmt(I.landDeg, 1)}° · typical is ${fmt(I.landTypical, 1)}°`;
     // contact time and contact length are one setting (length = speed x time); both sliders show the value in use
     const v = st.run, len = v * I.tc, Lleg = res.leg.legLen;
-    $('contact').min = Math.ceil(I.tcMin * 1000); $('contact').max = Math.floor(I.tcMax * 1000); $('contact').value = Math.round(I.tc * 1000);
-    $('contactLen').min = Math.ceil(v * I.tcMin * 100) / 100; $('contactLen').max = Math.floor(v * I.tcMax * 100) / 100; $('contactLen').value = Math.round(len * 100) / 100;
+    // (ends and value rounded the same way, so the value is always inside the range and matches the label)
+    $('contact').min = Math.round(I.tcMin * 1000); $('contact').max = Math.round(I.tcMax * 1000); $('contact').value = Math.round(I.tc * 1000);
+    $('contactLen').min = Math.round(v * I.tcMin * 100) / 100; $('contactLen').max = Math.round(v * I.tcMax * 100) / 100; $('contactLen').value = Math.round(len * 100) / 100;
     const nearTyp = st.contact == null && Math.abs(I.tc - I.tcTypical) > 1e-3;
     $('contactO').textContent = `${fmt(I.tc * 1000)} ms` + (st.contact == null ? (nearTyp ? ' · nearest to typical' : ' · typical') : '');
     $('contactLenO').textContent = `${fmt(len, 2)} m · ${fmt(len / Lleg, 2)} leg lengths`;
     const setTo = st.contact == null ? '' : st.contact.kind === 'time' ? `${fmt(st.contact.ms)} ms` : `${fmt(st.contact.m, 2)} m`;
-    $('contactHint').textContent = `Range at this speed, cadence and landing point: ${fmt(I.tcMin * 1000)}–${fmt(I.tcMax * 1000)} ms (${fmt(v * I.tcMin, 2)}–${fmt(v * I.tcMax, 2)} m). Shorter contacts leave the foot ahead of the hip for too much of the step, so braking outweighs propulsion and the runner would slow down; longer ones need more reach than the leg has at push-off, even rolling off the toes; and only one foot can be down at a time.` +
+    $('contactHint').textContent = `Range at this speed, cadence and landing point: ${fmt(I.tcMin * 1000)}–${fmt(I.tcMax * 1000)} ms (${fmt(v * I.tcMin, 2)}–${fmt(v * I.tcMax, 2)} m). ` + contactLimits(I) +
       (I.tcLimited ? ` Your setting of ${setTo} is outside that range, so ${fmt(I.tc * 1000)} ms (${fmt(len, 2)} m) is used.` : '') +
       (nearTyp ? ` The typical contact for this speed, ${fmt(I.tcTypical * 1000)} ms (${fmt(I.lenTypical, 2)} m), is outside it.` : '');
     $('realInfo').innerHTML = facts.map(([k, v]) => `<div><span class="k">${k}</span><span class="v">${v}</span></div>`).join('');
     const drag = I.minClear < -DRAG_TOL;
     $('balanceWarn').classList.toggle('hidden', !I.unbalanced);
-    $('balanceWarn').textContent = I.unbalanced ? `No contact time balances braking and propulsion at these settings, so this isn't steady running. To hold the speed anyway, the model tilts the ground force off the hip, which makes the hip work during contact. ` +
-      (Math.abs(I.landDeg - I.landTypical) > 2 ? `A landing point nearer the typical ${fmt(I.landTypical)}° fixes it.` : `A cadence nearer the typical ${fmt(typicalCadence(st.run))} steps/min fixes it.`) : '';
+    $('balanceWarn').textContent = I.unbalanced ? `No contact time balances braking and propulsion at these settings, so this isn't steady running. To hold the speed anyway, the model tilts the ground force off the hip, which makes the hip work during contact. ` + balanceFix(I) : '';
     $('kneeWarn').classList.toggle('hidden', !drag);
     $('kneeWarn').textContent = drag ? `At this bend the foot would dip about ${fmt(-I.minClear * 100)} cm into the ground in mid-swing. A real runner would trip or have to lift the hip, so bend the knee more.` : '';
     queueSweep();
@@ -908,6 +926,24 @@ function recompute() {
 }
 
 // "typical for this speed" arrows under the sliders. A typical value outside the slider's range sits at that end and says so.
+// why the contact-time range ends where it does, from the limits the model reports
+// which typical setting (landing point, cadence, or both) would let the contact balance; checked, not guessed
+function balanceFix(I) {
+  const o = opts('real'), leg = res.leg, cad = Math.max(120, Math.min(220, 2 * Math.round(typicalCadence(st.run) / 2)));
+  const ok = (oo, c) => !realisticPlan({ ...oo, cadence: c }, leg, 120 / c).unbalanced;
+  const land = `the typical landing point (${fmt(I.landTypical, 1)}°)`, cadTxt = `the typical cadence (${cad} steps/min)`;
+  if (st.landDeg != null && ok({ ...o, landDeg: null }, st.cadence)) return `Moving to ${land} fixes it.`;
+  if (ok(o, cad)) return `Moving to ${cadTxt} fixes it.`;
+  if (ok({ ...o, landDeg: null }, cad)) return `Moving to ${land} and ${cadTxt} fixes it.`;
+  return 'Typical landing and cadence don\'t fix it at this speed either.';
+}
+function contactLimits(I) {
+  const lo = { balance: 'Shorter contacts leave the foot ahead of the hip for too much of the step, so braking would outweigh propulsion and the runner would slow down.',
+               pass: 'Shorter contacts would end before the foot gets behind the hip.', min: 'Shorter than 60 ms is not allowed.' }[I.minWhy];
+  const hi = { balance: 'Longer contacts leave the foot behind the hip for too much of the step, so propulsion would outweigh braking and the runner would speed up.',
+               reach: "Longer contacts need more reach at push-off than the leg has, even rolling off the toes.", air: 'Longer contacts would put both feet on the ground at once.' }[I.maxWhy];
+  return I.unbalanced ? hi : `${lo} ${hi}`;
+}
 function marker(id, typ, unit, digits, show) {
   const input = $(id), m = $(id + 'Typ');
   input.parentElement.classList.toggle('has-typ', show); m.classList.toggle('on', show);

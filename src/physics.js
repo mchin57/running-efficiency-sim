@@ -56,18 +56,19 @@ function blankK(N) {
 // are whatever geometry makes the leg reach from the hip down to the ankle. The foot lowers at the rate that makes the
 // knee bend at a typical speed just after touchdown; later the heel lifts just enough to stop the knee straightening past
 // a floor that ends near 22 degrees at toe-off.
-// Typical values for a speed v (m/s) come from measured running (Clark, Meng & Stearne 2020, 154 trials at 3.1-10 m/s):
+// Typical values for a speed v (m/s) come from measured running. Clark, Meng & Stearne 2020 (154 trials at 3.1-10 m/s):
 // thigh angle at touchdown 0.033 v + 0.335 rad, contact time 0.78 v^-0.89 s (scaled with height from a 1.75 m runner),
-// step rate 0.31 v + 1.58 steps/s, peak swing thigh flexion 0.102 v + 0.273 rad.
+// peak swing thigh flexion 0.102 v + 0.273 rad. Cadence: a straight-line fit, 133.9 + 10.9 v steps/min, to 28 recreational
+// runners at 2.5, 3.5 and 4.5 m/s (Fukuchi et al. 2017, Table 4: 80.8, 85.7 and 91.7 strides/min).
 const REAL = { kneeTD: 20, kneeTO: 22, kneeMinTO: 10, kneeRateTD: 300, kneeRateTOMax: 600,
                strikeDeg: 12, flatAt: 0.15, rollStart: 0.45, liftKnee: 30, copMin: 0.10, holdAt: 0.85, rollMax: 65, skewMax: 0.5,
                toeLen: 0.30, tipAt: 0.6, toeRollMax: 45,           // toes are 30% of the foot; pressure reaches the tip 60% into the lift
-               thighTD: [0.033, 0.335], contactTime: [0.78, -0.89], refHeight: 1.75, stepRate: [0.31, 1.58],
+               thighTD: [0.033, 0.335], contactTime: [0.78, -0.89], refHeight: 1.75, cadence: [10.92, 133.9],
                thighFlex: [0.102, 0.273], retractMin: 4,   // peak swing thigh flexion = 0.102 v + 0.273 rad (v in m/s)
                termKnee: 14, clearBoostMax: 15 };          // knee bend at 88% of swing; most extra thigh swing for foot clearance
 const sstep = s => { s = Math.min(1, Math.max(0, s)); return s * s * s * (s * (6 * s - 15) + 10); };
 // typical cadence (steps per minute, both feet) at speed v
-function typicalCadence(v) { return 60 * (REAL.stepRate[0] * v + REAL.stepRate[1]); }
+function typicalCadence(v) { return REAL.cadence[0] * v + REAL.cadence[1]; }
 
 // Everything about the stride that does not depend on the late-swing knee bend: contact timing, ground force,
 // body motion and the stance-leg geometry.
@@ -114,13 +115,22 @@ function realisticPlan(o, leg, T) {
   // The heel starts to lift at 45% of contact, or earlier if the flat-foot knee, once it has passed its deepest bend and is
   // straightening again, would straighten past 30 degrees first. The centre of pressure gets at least 10% of the contact
   // to travel from heel to ball before the heel can lift.
+  // (Every step is continuous in the inputs, so the force skew that depends on it is too: the deepest bend is located
+  // exactly, not snapped to the search grid.)
   const liftStart = (tc, mo) => {
     const t0 = tFlat * tc, t1 = REAL.rollStart * tc, lim = REAL.liftKnee * D, n = 40, at = j => t0 + (t1 - t0) * j / n;
-    let jPk = 0; for (let j = 1; j <= n; j++) if (kneeFlat(mo, at(j)) > kneeFlat(mo, at(jPk))) jPk = j;   // deepest bend
+    const kn = t => kneeFlat(mo, t);
+    let jPk = 0; for (let j = 1; j <= n; j++) if (kn(at(j)) > kn(at(jPk))) jPk = j;
+    // refine the deepest bend between the neighbouring grid points (golden-section search)
+    let a = at(Math.max(0, jPk - 1)), b = at(Math.min(n, jPk + 1));
+    const gr = (Math.sqrt(5) - 1) / 2;
+    for (let it = 0; it < 60; it++) { const c = b - gr * (b - a), d = a + gr * (b - a); if (kn(c) > kn(d)) b = d; else a = c; }
+    const tPk = Math.min(t1, Math.max(t0, (a + b) / 2));
     let tR = t1;
-    for (let j = jPk; j <= n; j++) if (kneeFlat(mo, at(j)) <= lim) {
-      let lo = at(Math.max(jPk, j - 1)), hi = at(j);
-      for (let it = 0; it < 40; it++) { const m = (lo + hi) / 2; if (kneeFlat(mo, m) <= lim) hi = m; else lo = m; }
+    if (kn(tPk) <= lim) tR = tPk;               // already straighter than 30 degrees at its deepest: lift as it starts to straighten
+    else for (let j = jPk; j <= n; j++) if (at(j) > tPk && kn(at(j)) <= lim) {
+      let lo = Math.max(tPk, at(j - 1)), hi = at(j);
+      for (let it = 0; it < 50; it++) { const m = (lo + hi) / 2; if (kn(m) <= lim) hi = m; else lo = m; }
       tR = hi; break;
     }
     return Math.min(t1, Math.max(tR, t0 + REAL.copMin * tc));
@@ -146,12 +156,13 @@ function realisticPlan(o, leg, T) {
       const need = i2 !== 0 ? -i1 / i2 : Infinity;
       return { kap, need, mo, tR, g: need - kap };
     };
-    const pts = [-1, -0.5, 0, 0.5, 1].map(f => ev(f * cap)), mid = pts[2];
+    const NK = 8, pts = Array.from({ length: NK + 1 }, (_, j) => ev((2 * j / NK - 1) * cap)), mid = pts[NK / 2];
     // the bracket (sign change of need - kappa) nearest zero skew
     let br = null;
-    for (const [i, j] of [[2, 3], [1, 2], [3, 4], [0, 1]]) if (isFinite(pts[i].g) && isFinite(pts[j].g) && pts[i].g * pts[j].g <= 0) { br = [pts[i], pts[j]]; break; }
+    const order = Array.from({ length: NK }, (_, j) => j).sort((p, q) => Math.abs(p + 0.5 - NK / 2) - Math.abs(q + 0.5 - NK / 2));
+    for (const i of order) if (isFinite(pts[i].g) && isFinite(pts[i + 1].g) && pts[i].g * pts[i + 1].g <= 0) { br = [pts[i], pts[i + 1]]; break; }
     if (!br) {   // no balance: use the limit on the side the need points to
-      const end = mid.need >= 0 ? pts[4] : pts[0];
+      const end = mid.need >= 0 ? pts[NK] : pts[0];
       return { kap: end.kap, need: isFinite(end.need) && Math.abs(end.need) > cap ? end.need : Math.sign(mid.need || 1) * Infinity, mo: end.mo, tR: end.tR };
     }
     let [lo, hi] = br, best = Math.abs(lo.g) < Math.abs(hi.g) ? lo : hi;
@@ -200,9 +211,9 @@ function realisticPlan(o, leg, T) {
   // set (within the limits); the landing point stays where it is, so the push-off point moves.
   const lenTypical = REAL.contactTime[0] * v ** (REAL.contactTime[1] + 1) * leg.legLen / (0.53 * REAL.refHeight);
   const tcTyp = lenTypical / v;
-  const tcWanted = o.contactMs != null ? o.contactMs / 1000 : o.contactLen != null ? o.contactLen / v : Math.min(tcTyp, 0.9 * Ts);
+  const tcWanted = o.contactMs != null ? o.contactMs / 1000 : o.contactLen != null ? o.contactLen / v : tcTyp;
   // stretches of contact time that balance, found on a grid and refined at their edges
-  const NG = 24, grid = Array.from({ length: NG + 1 }, (_, j) => reachMin + (reachMax - reachMin) * j / NG), ok = grid.map(balances);
+  const NG = 40, grid = Array.from({ length: NG + 1 }, (_, j) => reachMin + (reachMax - reachMin) * j / NG), ok = grid.map(balances);
   const edge = (good, bad) => { for (let it = 0; it < 12; it++) { const m = (good + bad) / 2; if (balances(m)) good = m; else bad = m; } return good; };
   const ranges = [];
   for (let j = 0; j <= NG; j++) if (ok[j] && (j === 0 || !ok[j - 1])) {
@@ -215,6 +226,11 @@ function realisticPlan(o, leg, T) {
     const dist = r => tcWanted < r[0] ? r[0] - tcWanted : tcWanted > r[1] ? tcWanted - r[1] : 0;
     [tcMin, tcMax] = ranges.reduce((b, r) => dist(r) < dist(b) ? r : b);
   }
+  // which limit sets each end of the range, for the page: 'pass' (the foot has to get behind the hip), 'min' (60 ms floor),
+  // 'balance' (braking and propulsion stop cancelling), 'reach' (the leg can't reach at push-off), 'air' (both feet down)
+  const near = (x, y) => Math.abs(x - y) < 1e-6;
+  const minWhy = !unbalanced && tcMin > reachMin + 1e-6 ? 'balance' : near(reachMin, 0.06) ? 'min' : 'pass';
+  const maxWhy = !unbalanced && tcMax < reachMax - 1e-6 ? 'balance' : reachMax < 0.95 * Ts - 1e-6 ? 'reach' : 'air';
   const tc = Math.max(tcMin, Math.min(tcMax, tcWanted));
   const userSet = o.contactMs != null || o.contactLen != null;
   const tcLimited = userSet && Math.abs(tc - tcWanted) > 5e-4 ? (tc > tcWanted ? 'min' : 'max') : null;
@@ -300,7 +316,7 @@ function realisticPlan(o, leg, T) {
   }
   let fMax = 0, fAt = 0;
   for (let j = 0; j <= 400; j++) { const s = j / 400, f = Math.sin(Math.PI * s) + kap * Math.sin(2 * Math.PI * s); if (f > fMax) { fMax = f; fAt = s; } }
-  return { v, Ts, tc, tf, Tsw, a, ball, sole, landDeg, landTypical, landLimited, tcTypical: tcTyp, lenTypical, tcMin, tcMax, tcLimited, unbalanced,
+  return { v, Ts, tc, tf, Tsw, a, ball, sole, landDeg, landTypical, landLimited, tcTypical: tcTyp, lenTypical, tcMin, tcMax, minWhy, maxWhy, tcLimited, unbalanced,
            kap, roll, toeRoll: toeTO, strike: b0, yTD, yTO, vTD: mo.vTD, vTO: mo.vTO,
            liftStart: tR / tc, peakGRF: mo.Fpk * fMax / G, forcePeakAt: fAt, copAt: tau => copAt(tau, tc, tR), stanceAt, hip };
 }
@@ -385,7 +401,7 @@ function realisticCore(o, leg, T, N, P, clearBoost) {
   K.info = { tc, tf, Tsw, stepLen: v * P.Ts, peakGRF: P.peakGRF, forcePeakAt: P.forcePeakAt, skew: P.kap, rollDeg: P.roll / D, strikeDeg: P.strike / D,
              kneeLoadDeg: kneeLoad / D, kneeTODeg: TO.ph[0] / D, kneeRateTD: TD.ph[1] / D, kneeRateTO: TO.ph[1] / D, reachShort: short,
              bob: yMax - yMin, hipMax: yMax, phMaxDeg: phMax, phTypical, minClear, lateClear, clearBoost, thighPeakDeg: thMax / D, a: P.a, ball: P.ball,
-             landDeg: P.landDeg, landTypical: P.landTypical, landLimited: P.landLimited, contactLen: v * tc, tcTypical: P.tcTypical, lenTypical: P.lenTypical, toeRollDeg: P.toeRoll / D, tcMin: P.tcMin, tcMax: P.tcMax,
+             landDeg: P.landDeg, landTypical: P.landTypical, landLimited: P.landLimited, contactLen: v * tc, tcTypical: P.tcTypical, lenTypical: P.lenTypical, toeRollDeg: P.toeRoll / D, tcMin: P.tcMin, tcMax: P.tcMax, minWhy: P.minWhy, maxWhy: P.maxWhy,
              tcLimited: P.tcLimited, unbalanced: P.unbalanced, pushBehind: v * tc - P.a };
   return K;
 }
@@ -511,7 +527,9 @@ function simulate(o) {
       const axp = K.footX[i], ayp = K.ankleZ[i], cx = K.copX[i];
       const cross = (rx, ry) => -(rx * Fy - ry * Fx);        // moment on the distal part from the proximal one: -(r_cop - r_joint) x F
       const Mh = cross(cx - 0, 0 - hipY), Mk = cross(cx - kx, 0 - ky), Ma = cross(cx - axp, 0 - ayp);
-      const Mm = cross(cx - K.ballX[i], 0 - K.ballZ[i]);     // toe joint (ball of the foot): moment on the toes from the rearfoot
+      // toe joint (ball of the foot): moment on the toes from the rearfoot. The toes only carry load once the pressure is
+      // on them; while it is on the heel or the rearfoot they are unloaded.
+      const Mm = cx > K.ballX[i] + 1e-9 ? cross(cx - K.ballX[i], 0 - K.ballZ[i]) : 0;
       const wT = K.thd[i], wS = K.thd[i] - K.phd[i], wF = K.footAngRate[i], wToe = K.toeAngRate[i];
       const Ph = Mh * wT, Pk = Mk * (wS - wT), Pa = Ma * (wF - wS), Pm = Mm * (wToe - wF);
       S.tauH[i] = Mh; S.tauK[i] = Mk; S.tauA[i] = Ma; S.tauM[i] = Mm; S.Ph[i] = Ph; S.Pk[i] = Pk; S.Pa[i] = Pa; S.Pm[i] = Pm;

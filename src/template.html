@@ -275,13 +275,13 @@ power = torque × joint angular velocity</pre>
         <li>Lower leg and foot move as one rigid piece; the foot's mass sits just below the ankle.</li>
         <li>Cadence counts steps per minute, both feet. Each leg makes cadence ÷ 120 strides per second.</li>
         <li>Simple modes: the hip does not move and nothing touches the ground.</li>
-        <li>Typical values for this speed (the arrows under the sliders) come from measured runners at 3.1–10 m/s (Clark, Meng &amp; Stearne 2020): the thigh's angle at touchdown sets the landing point (about 13–19° from 3 to 6 m/s), contact time is 0.78 × speed<sup>−0.89</sup> seconds, scaled with height (about 0.95–1.0 leg lengths of travel), and step rate is 0.31 × speed + 1.58 per second. Click an arrow to use that value. At slow speeds the model can't quite reach the typical contact length: braking and propulsion stop balancing first, so it uses the nearest it can.</li>
+        <li>Typical values for this speed (the arrows under the sliders) come from measured runners. From runners at 3.1–10 m/s (Clark, Meng &amp; Stearne 2020): the thigh's angle at touchdown sets the landing point (about 13–19° from 3 to 6 m/s), and contact time is 0.78 × speed<sup>−0.89</sup> seconds, scaled with height (about 0.95–1.0 leg lengths of travel). Cadence is 133.9 + 10.9 × speed steps per minute, fitted to 28 recreational runners at 2.5–4.5 m/s (Fukuchi et al. 2017). Click an arrow to use that value. At slow speeds the model can't quite reach the typical contact length: braking and propulsion stop balancing first, so it uses the nearest it can (published contact times differ a lot between studies at these speeds, and the model's falls within that spread).</li>
         <li>Foot: the heel strikes with the toes 12° up and the foot is flat by 15% of the contact. The heel starts to lift at about 45% of the contact (earlier if, after its deepest bend, the knee would otherwise straighten past 30°) and can lift up to 65°, while the pressure moves out to the toe tip. The toes (the front 30% of the foot) then roll up about their tip, up to 45°, only as far as the leg needs to reach. The toe joint mostly absorbs energy as it bends. The pelvis does not tilt or rotate.</li>
         <li>The swinging leg's foot is lumped with the shin, so the ankle only appears during stance.</li>
-        <li>Peak forward thigh swing: 0.102 × speed + 0.273 radians from vertical (Clark, Meng &amp; Stearne 2020, runners at 3.1–10 m/s), and at least 4° past the touchdown angle. Cadence stays where you set it; runners in that study raised their step rate with speed (about 150 steps/min at 3 m/s, 205 at 6 m/s, shown by the cadence arrow), which makes swing cost climb much faster with speed than it does at a fixed cadence.</li>
+        <li>Peak forward thigh swing: 0.102 × speed + 0.273 radians from vertical (Clark, Meng &amp; Stearne 2020, runners at 3.1–10 m/s), and at least 4° past the touchdown angle. Cadence stays where you set it; real runners raise it with speed (the cadence arrow: about 167 steps/min at 3 m/s and 199 at 6 m/s), which makes swing cost climb faster with speed than it does at a fixed cadence.</li>
         <li>In stance, real tendons (especially the Achilles) store braking work and give much of it back. About 40% tendon energy return brings the whole-stride food energy in line with measured running costs (roughly 3.7–4 J per kg per metre).</li>
         <li>Contact time and contact length are one setting (length = speed × time): set either, and the one you set stays put when you change speed. Setting it, or the landing point, moves the push-off point. Shorter contact means a harder push from the ground, since the same body weight has to be supported in less time.</li>
-        <li><strong>Read joint shares with care.</strong> The ground force is aimed through the hip, so in this model the hip does no work while the foot is down and the knee and ankle do all of it. In real runners the force line passes a little in front of and behind the hip and the hip muscles do a good share of stance work, so here the knee and ankle look more important than they are, with peak knee and ankle moments roughly 40–65% above measured values. Whole-stride totals are less affected than the split between joints.</li>
+        <li><strong>Read joint shares with care.</strong> The ground force is aimed through the hip, so in this model the hip does no work while the foot is down and the knee and ankle do all of it. In real runners the force line passes a little in front of and behind the hip and the hip muscles do a good share of stance work, so here the knee and ankle look more important than they are, with peak knee moments about 1.4–1.7 times measured values and peak ankle moments 25–55% above them. Whole-stride totals are less affected than the split between joints.</li>
         <li><strong>Cadence matters too much for swing.</strong> The swing leg follows a set path, so a higher cadence means the same path in less time, and swing work climbs very steeply. Measured limb-moving work rises much more gently with step rate. The direction is right; the size of the effect is exaggerated.</li>
         <li><strong>Food energy is a rough conversion.</strong> All positive work is converted at one muscle efficiency (25% by default) and braking work is treated as free. Measured running looks far more efficient than 25% (apparent efficiencies of about 45–70% have been reported, largely thanks to tendon recoil), and braking work does cost some energy. That is why about 40% tendon return is needed to match measured costs. Comparisons between settings are more trustworthy than the absolute calories.</li>
         <li>All knee motion is driven by muscle. Real runners get much of the knee bend for free from push-off and whip-like coupling with the thigh, so measured costs are lower than <em>Bend, then straighten</em> shows here.</li>
@@ -338,20 +338,20 @@ function recompute() {
       : st.landDeg == null ? `${fmt(I.landDeg, 1)}° · typical` : `${fmt(I.landDeg, 1)}° · typical is ${fmt(I.landTypical, 1)}°`;
     // contact time and contact length are one setting (length = speed x time); both sliders show the value in use
     const v = st.run, len = v * I.tc, Lleg = res.leg.legLen;
-    $('contact').min = Math.ceil(I.tcMin * 1000); $('contact').max = Math.floor(I.tcMax * 1000); $('contact').value = Math.round(I.tc * 1000);
-    $('contactLen').min = Math.ceil(v * I.tcMin * 100) / 100; $('contactLen').max = Math.floor(v * I.tcMax * 100) / 100; $('contactLen').value = Math.round(len * 100) / 100;
+    // (ends and value rounded the same way, so the value is always inside the range and matches the label)
+    $('contact').min = Math.round(I.tcMin * 1000); $('contact').max = Math.round(I.tcMax * 1000); $('contact').value = Math.round(I.tc * 1000);
+    $('contactLen').min = Math.round(v * I.tcMin * 100) / 100; $('contactLen').max = Math.round(v * I.tcMax * 100) / 100; $('contactLen').value = Math.round(len * 100) / 100;
     const nearTyp = st.contact == null && Math.abs(I.tc - I.tcTypical) > 1e-3;
     $('contactO').textContent = `${fmt(I.tc * 1000)} ms` + (st.contact == null ? (nearTyp ? ' · nearest to typical' : ' · typical') : '');
     $('contactLenO').textContent = `${fmt(len, 2)} m · ${fmt(len / Lleg, 2)} leg lengths`;
     const setTo = st.contact == null ? '' : st.contact.kind === 'time' ? `${fmt(st.contact.ms)} ms` : `${fmt(st.contact.m, 2)} m`;
-    $('contactHint').textContent = `Range at this speed, cadence and landing point: ${fmt(I.tcMin * 1000)}–${fmt(I.tcMax * 1000)} ms (${fmt(v * I.tcMin, 2)}–${fmt(v * I.tcMax, 2)} m). Shorter contacts leave the foot ahead of the hip for too much of the step, so braking outweighs propulsion and the runner would slow down; longer ones need more reach than the leg has at push-off, even rolling off the toes; and only one foot can be down at a time.` +
+    $('contactHint').textContent = `Range at this speed, cadence and landing point: ${fmt(I.tcMin * 1000)}–${fmt(I.tcMax * 1000)} ms (${fmt(v * I.tcMin, 2)}–${fmt(v * I.tcMax, 2)} m). ` + contactLimits(I) +
       (I.tcLimited ? ` Your setting of ${setTo} is outside that range, so ${fmt(I.tc * 1000)} ms (${fmt(len, 2)} m) is used.` : '') +
       (nearTyp ? ` The typical contact for this speed, ${fmt(I.tcTypical * 1000)} ms (${fmt(I.lenTypical, 2)} m), is outside it.` : '');
     $('realInfo').innerHTML = facts.map(([k, v]) => `<div><span class="k">${k}</span><span class="v">${v}</span></div>`).join('');
     const drag = I.minClear < -DRAG_TOL;
     $('balanceWarn').classList.toggle('hidden', !I.unbalanced);
-    $('balanceWarn').textContent = I.unbalanced ? `No contact time balances braking and propulsion at these settings, so this isn't steady running. To hold the speed anyway, the model tilts the ground force off the hip, which makes the hip work during contact. ` +
-      (Math.abs(I.landDeg - I.landTypical) > 2 ? `A landing point nearer the typical ${fmt(I.landTypical)}° fixes it.` : `A cadence nearer the typical ${fmt(typicalCadence(st.run))} steps/min fixes it.`) : '';
+    $('balanceWarn').textContent = I.unbalanced ? `No contact time balances braking and propulsion at these settings, so this isn't steady running. To hold the speed anyway, the model tilts the ground force off the hip, which makes the hip work during contact. ` + balanceFix(I) : '';
     $('kneeWarn').classList.toggle('hidden', !drag);
     $('kneeWarn').textContent = drag ? `At this bend the foot would dip about ${fmt(-I.minClear * 100)} cm into the ground in mid-swing. A real runner would trip or have to lift the hip, so bend the knee more.` : '';
     queueSweep();
@@ -367,6 +367,24 @@ function recompute() {
 }
 
 // "typical for this speed" arrows under the sliders. A typical value outside the slider's range sits at that end and says so.
+// why the contact-time range ends where it does, from the limits the model reports
+// which typical setting (landing point, cadence, or both) would let the contact balance; checked, not guessed
+function balanceFix(I) {
+  const o = opts('real'), leg = res.leg, cad = Math.max(120, Math.min(220, 2 * Math.round(typicalCadence(st.run) / 2)));
+  const ok = (oo, c) => !realisticPlan({ ...oo, cadence: c }, leg, 120 / c).unbalanced;
+  const land = `the typical landing point (${fmt(I.landTypical, 1)}°)`, cadTxt = `the typical cadence (${cad} steps/min)`;
+  if (st.landDeg != null && ok({ ...o, landDeg: null }, st.cadence)) return `Moving to ${land} fixes it.`;
+  if (ok(o, cad)) return `Moving to ${cadTxt} fixes it.`;
+  if (ok({ ...o, landDeg: null }, cad)) return `Moving to ${land} and ${cadTxt} fixes it.`;
+  return 'Typical landing and cadence don\'t fix it at this speed either.';
+}
+function contactLimits(I) {
+  const lo = { balance: 'Shorter contacts leave the foot ahead of the hip for too much of the step, so braking would outweigh propulsion and the runner would slow down.',
+               pass: 'Shorter contacts would end before the foot gets behind the hip.', min: 'Shorter than 60 ms is not allowed.' }[I.minWhy];
+  const hi = { balance: 'Longer contacts leave the foot behind the hip for too much of the step, so propulsion would outweigh braking and the runner would speed up.',
+               reach: "Longer contacts need more reach at push-off than the leg has, even rolling off the toes.", air: 'Longer contacts would put both feet on the ground at once.' }[I.maxWhy];
+  return I.unbalanced ? hi : `${lo} ${hi}`;
+}
 function marker(id, typ, unit, digits, show) {
   const input = $(id), m = $(id + 'Typ');
   input.parentElement.classList.toggle('has-typ', show); m.classList.toggle('on', show);
