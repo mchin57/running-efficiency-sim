@@ -806,4 +806,6 @@ function main() {
   console.log('\nwrote ' + path.relative(process.cwd(), OUT) + ' and ' + CSV);
 }
 
-main();
+// helpers are shared with tools/momentum-fukuchi.js; the analysis only runs when this file is the entry point
+module.exports = { readTable, markers, rigidFit, cond2, conditioned, cubic, loadStatic, prepTrial, segFilter, THIGH, SHANK, PELVIS, mean, sd, median, fin, r4, ols, FS_M, FS_F, DIR, SPEEDS, SPEED_LABEL, SPEED_MS, NSUBJ, REAR };
+if (require.main === module) main();
