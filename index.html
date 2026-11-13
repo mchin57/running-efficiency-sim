@@ -234,7 +234,7 @@ pre { font-family: var(--font-mono); font-size: 12.5px; background: var(--soft);
         <span class="lbl">Physics</span>
         <label class="check" id="gravityRow"><input type="checkbox" id="gravity" checked><span>Gravity</span><span class="hint" id="gravityHint">Lets the leg act as a pendulum, which lowers the muscle work.</span></label>
         <label class="check"><input type="checkbox" id="share" checked><span>Hip and knee can share energy</span><span class="hint">Off: each joint pays for its own positive work, even when the other joint is braking at the same moment.</span></label>
-        <div class="row"><label for="elastic">Tendon energy return</label><output id="elasticO" for="elastic"></output><input type="range" id="elastic" min="0" max="100" step="1" value="0"><span class="hint">Share of the braking work that springs back instead of being lost.</span></div>
+        <div class="row"><label for="elastic">Tendon energy return</label><output id="elasticO" for="elastic"></output><input type="range" id="elastic" min="0" max="100" step="1" value="0"><span class="hint">Share of the braking work that springs back instead of being lost.</span><span class="hint" id="elasticNote"></span></div>
         <div class="row"><label for="eff">Muscle efficiency</label><output id="effO" for="eff"></output><input type="range" id="eff" min="15" max="35" step="1" value="25"><span class="hint">Converts mechanical work into food energy burned.</span></div>
       </div>
       <button class="btn" id="resetBtn" type="button">Reset all settings</button>
@@ -1023,6 +1023,17 @@ function syncControls() {
   $('arc').value = st.arc; $('arcO').textContent = `${st.arc}° (±${st.arc / 2}°)`;
   $('run').value = st.run; $('runO').textContent = `${fmt(st.run, 1)} m/s · ${pace(st.run, 1609.34)} /mi · ${pace(st.run, 1000)} /km`;
   $('elastic').value = st.elastic; $('elasticO').textContent = `${st.elastic}%`;
+  const e = st.elastic;
+  const note = e === 0 ? 'No spring at all: the muscles redo every joule each step. Real running is cheaper than this.'
+    : e < 25 ? 'Less spring than real running: food energy comes out well above measured costs.'
+    : e < 35 ? 'A stiff, uneconomical runner: food energy comes out above typical measured costs.'
+    : e <= 45 ? 'About right for a typical runner: around 40% makes this model match measured energy costs.'
+    : e <= 55 ? 'A very economical runner: the cost comes out roughly 10 to 20% below typical, about the gap between elite distance runners and average ones.'
+    : e <= 70 ? 'More economical than any runner this model has data for. Treat the numbers as unrealistic.'
+    : e < 100 ? 'Not realistic: almost nothing is left for the muscles to do. Tendons themselves lose several percent of what they store.'
+    : 'Impossible: a perfect spring. The stance phase costs nothing at all.';
+  $('elasticNote').textContent = note;
+  $('elasticNote').classList.toggle('warn', e > 55);
   $('eff').value = st.eff; $('effO').textContent = `${st.eff}%`;
   $('gravity').checked = real ? true : st.gravity; $('gravity').disabled = real; $('share').checked = st.share;
   $('gravityRow').classList.toggle('disabled', real);
