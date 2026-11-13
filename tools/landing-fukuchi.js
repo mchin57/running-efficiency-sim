@@ -211,6 +211,8 @@ function loadStatic(id) {
     if (heel && mt1) foreOff.mt1 = fa(heel, mt1);
     if (heel && mt5) foreOff.mt5 = fa(heel, mt5);
     res.legs[s].foreOff = foreOff;
+    const foreX = mt1 && mt5 ? (mt1[0] + mt5[0]) / 2 : (mt1 || mt5 || [NaN])[0];
+    res.legs[s].footLen = heel ? (foreX - heel[0]) / 1000 : NaN;     // standing heel to forefoot-marker distance along X, m
     res.legs[s].footLowY = Math.min(...[heel, mt1, mt5].filter(Boolean).map(p => p[1]));
   }
   // pelvis hip joint centres from the static pelvis markers
@@ -306,6 +308,7 @@ function prepTrial(id, sp, st, log) {
   }
   T.contacts = T.contacts.filter(c => c.leg);
   T.nAmbiguous = ambiguous.length;
+  T.force = { fx: ft.cols.Fx, fy: ft.cols.Fy, cop: ft.cols.COPx };
   return T;
 }
 
@@ -313,6 +316,7 @@ function prepTrial(id, sp, st, log) {
 const HIPDEP = ['ankleAhead', 'heelAhead', 'hipHeight', 'landDeg', 'thighDeg', 'kneeDeg'];
 function strideMetrics(T, st, subj, ground, leg, rej) {
   const L = T.legs[leg], cs = T.contacts, recs = [];
+  recs.fl = [];     // force-line records, parallel to recs (kept off the stride objects so the earlier outputs do not change)
   const stepTimes = []; for (let i = 0; i + 1 < cs.length; i++) stepTimes.push(cs[i + 1].t0 - cs[i].t0);
   const medStep = median(stepTimes.filter(x => x > 0.2 && x < 1.0));
   const foreOff = st.legs[leg].foreOff;
@@ -373,8 +377,103 @@ function strideMetrics(T, st, subj, ground, leg, rej) {
     }
     if (!ok) { rej.nan++; continue; }
     recs.push(r);
+    recs.fl.push(forceLineStride(T, a, tN, L, leg, st, subj));
   }
   return recs;
+}
+
+// ---------------------------------------------------------------- force line through the contact (curves at 0, 5 ... 100 % of stance)
+const FL_PCT = Array.from({ length: 21 }, (_, i) => i * 5);
+const FL_CURVES = ['copAheadHip', 'copAheadHipHjc', 'copAheadHeel', 'copAlongFoot', 'copAheadAnkle', 'fxOverFy', 'fyBW', 'fxBW', 'lineAtHip', 'lineAtHipHjc', 'hipVx', 'hipVy', 'hipHeight', 'hipHeightHjc'];
+const FL_MASKED = new Set(['copAheadHip', 'copAheadHipHjc', 'copAheadHeel', 'copAlongFoot', 'copAheadAnkle', 'fxOverFy', 'lineAtHip', 'lineAtHipHjc']);
+const FL_LP = 30, FL_MINFY = 0.2;     // Hz, body weights
+// zero-lag 2nd-order Butterworth (forward and backward, steady-state start) of one contact segment with odd-reflection padding
+function segFilter(x, fc) {
+  const len = x.length, pad = Math.min(15, len - 1), p = new Float64Array(len + 2 * pad);
+  for (let k = 0; k < pad; k++) { p[pad - 1 - k] = 2 * x[0] - x[1 + k]; p[pad + len + k] = 2 * x[len - 1] - x[len - 2 - k]; }
+  for (let k = 0; k < len; k++) p[pad + k] = x[k];
+  const K = Math.tan(Math.PI * fc / FS_F), nrm = 1 / (1 + Math.SQRT2 * K + K * K);
+  const b0 = K * K * nrm, b1 = 2 * b0, a1 = 2 * (K * K - 1) * nrm, a2 = (1 - Math.SQRT2 * K + K * K) * nrm;
+  const pass = v => { const y = new Float64Array(v.length); let z1 = v[0] * (1 - b0), z2 = v[0] * (b0 - a2);
+    for (let i = 0; i < v.length; i++) { const o = b0 * v[i] + z1; z1 = b1 * v[i] - a1 * o + z2; z2 = b0 * v[i] - a2 * o; y[i] = o; } return y; };
+  return pass(pass(p).reverse()).reverse().slice(pad, pad + len);
+}
+function forceLineStride(T, a, tN, L, leg, st, subj) {
+  const fl = { c: {}, s: {} };
+  for (const q of FL_CURVES) fl.c[q] = new Array(FL_PCT.length).fill(NaN);
+  const BW = subj.mass * 9.81, mass = subj.mass, F = T.force;
+  const i0 = Math.ceil(a.t0 * FS_F), i1 = Math.floor(a.t1 * FS_F), len = i1 - i0 + 1;
+  if (len < 10) return fl;
+  const raw = arr => Array.from(arr.slice(i0, i1 + 1));
+  const fyR = raw(F.fy), fxR = raw(F.fx), copR = raw(F.cop);
+  // COP is undefined at low force: hold the nearest well-defined value before filtering (those samples are masked afterwards)
+  const good = fyR.map(v => v >= FL_MINFY * BW), g0 = good.indexOf(true);
+  if (g0 < 0) return fl;
+  for (let j = g0 - 1; j >= 0; j--) copR[j] = copR[j + 1];
+  for (let j = g0 + 1; j < len; j++) if (!good[j]) copR[j] = copR[j - 1];
+  const fy = segFilter(fyR, FL_LP), fx = segFilter(fxR, FL_LP), cop = segFilter(copR, FL_LP);
+  const at = (arr, t) => { const u = Math.min(len - 1, Math.max(0, t * FS_F - i0)), j = Math.min(len - 2, Math.floor(u)); return arr[j] + (arr[j + 1] - arr[j]) * (u - j); };
+  const footLen = st.legs[leg].footLen;
+  for (const v of ['gtr', 'hjc']) if (!L[v].vx) {          // hip velocity in the lab frame, m/s (central difference of the filtered 150 Hz series)
+    const n = L[v].x.length; L[v].vx = new Float64Array(n).fill(NaN); L[v].vy = new Float64Array(n).fill(NaN);
+    for (let k = 1; k < n - 1; k++) { L[v].vx[k] = (L[v].x[k + 1] - L[v].x[k - 1]) * FS_M / 2000; L[v].vy[k] = (L[v].y[k + 1] - L[v].y[k - 1]) * FS_M / 2000; }
+  }
+  const sample = t => {
+    const hip = ptAt(L.gtr, t), hj = ptAt(L.hjc, t), ank = ptAt(L.ankle, t), heel = ptAt(L.heel, t);
+    const fyv = at(fy, t), fxv = at(fx, t), cx = at(cop, t), valid = fyv >= FL_MINFY * BW;
+    return { hip, hj, ank, heel, fyv, fxv, cx, valid };
+  };
+  FL_PCT.forEach((p, i) => {
+    const t = a.t0 + p / 100 * a.dur, S = sample(t), c = fl.c;
+    c.fyBW[i] = S.fyv / BW; c.fxBW[i] = S.fxv / BW;
+    c.hipVx[i] = cubic(L.gtr.vx, t * FS_M); c.hipVy[i] = cubic(L.gtr.vy, t * FS_M);
+    c.hipHeight[i] = S.hip.y / 1000; c.hipHeightHjc[i] = S.hj.y / 1000;
+    if (!S.valid) return;
+    c.copAheadHip[i] = (S.cx - S.hip.x) / 1000; c.copAheadHipHjc[i] = (S.cx - S.hj.x) / 1000;
+    c.copAheadHeel[i] = (S.cx - S.heel.x) / 1000; c.copAlongFoot[i] = c.copAheadHeel[i] / footLen; c.copAheadAnkle[i] = (S.cx - S.ank.x) / 1000;
+    c.fxOverFy[i] = S.fxv / S.fyv;
+    // line of the ground force: x where it crosses hip height (hip height above the plate = marker Y, i.e. marker hip height + the subject's marker-ground offset)
+    c.lineAtHip[i] = c.copAheadHip[i] + c.fxOverFy[i] * S.hip.y / 1000;
+    c.lineAtHipHjc[i] = c.copAheadHipHjc[i] + c.fxOverFy[i] * S.hj.y / 1000;
+  });
+  const s = fl.s, cr = fl.c, mean20 = arr => { const v = fin(FL_PCT.map((p, i) => p >= 20 && p <= 40 ? arr[i] : NaN)); return v.length ? mean(v) : NaN; };
+  s.lineAtHip_20_40 = mean20(cr.lineAtHip); s.lineAtHip_20_40_hjc = mean20(cr.lineAtHipHjc);
+  // braking ends: first upward zero crossing of Fx after its minimum; impulses in m/s from the real timing (1/300 s samples)
+  let jm = 0; for (let j = 1; j < len; j++) if (fx[j] < fx[jm]) jm = j;
+  s.fxZeroPct = NaN;
+  for (let j = jm + 1; j < len; j++) if (fx[j - 1] < 0 && fx[j] >= 0) { const tt = (i0 + j - 1 + (-fx[j - 1]) / (fx[j] - fx[j - 1])) / FS_F; s.fxZeroPct = 100 * (tt - a.t0) / a.dur; break; }
+  let br = 0, pr = 0;
+  for (let j = 0; j < len - 1; j++) { const x0 = fx[j], x1 = fx[j + 1]; br += 0.5 * (Math.min(x0, 0) + Math.min(x1, 0)) / FS_F; pr += 0.5 * (Math.max(x0, 0) + Math.max(x1, 0)) / FS_F; }
+  s.brakeImpulse = -br / mass; s.propImpulse = pr / mass;
+  let jp = 0; for (let j = 1; j < len; j++) if (fy[j] > fy[jp]) jp = j;
+  s.peakFyBW = fy[jp] / BW; s.peakFyPct = 100 * ((i0 + jp) / FS_F - a.t0) / a.dur;
+  // pressure passes under the hip: first crossing of copAheadHip from + to - on a 1 % grid (valid force only)
+  s.copZeroPct = NaN; { let prev = null;
+    for (let p = 0; p <= 100; p++) { const S = sample(a.t0 + p / 100 * a.dur); if (!S.valid) { prev = null; continue; }
+      const d = (S.cx - S.hip.x) / 1000; if (prev && prev.d >= 0 && d < 0) { s.copZeroPct = prev.p + prev.d / (prev.d - d); break; } prev = { p, d }; } }
+  // heel-off: first time after mid-stance that Heel.Bottom is 10 mm above its 40-60 % level, as % of stance
+  s.heelOffPct = NaN; {
+    const lv = fin([0.4, 0.45, 0.5, 0.55, 0.6].map(f => ptAt(L.heel, a.t0 + f * a.dur).y));
+    if (lv.length >= 3) { const lev = median(lv) + 10;
+      for (let k = Math.ceil((a.t0 + 0.5 * a.dur) * FS_M); k / FS_M <= a.t1 + 0.02; k++) {
+        const y1 = L.heel.y[k], y0 = L.heel.y[k - 1];
+        if (Number.isFinite(y1) && Number.isFinite(y0) && y0 <= lev && y1 > lev) { s.heelOffPct = 100 * ((k - 1 + (lev - y0) / (y1 - y0)) / FS_M - a.t0) / a.dur; break; } } }
+  }
+  // COP between heel and forefoot markers (plus 30 mm) over 20-60 % of stance, fraction of valid points
+  { let ok = 0, nn = 0;
+    for (const p of [20, 25, 30, 35, 40, 45, 50, 55, 60]) { const t = a.t0 + p / 100 * a.dur, S = sample(t), m1 = ptAt(L.mt1, t), m5 = ptAt(L.mt5, t), fx_ = Math.max(...fin([m1.x, m5.x]));
+      if (!S.valid || !Number.isFinite(S.heel.x) || !Number.isFinite(fx_)) continue; nn++; if (S.cx >= S.heel.x - 30 && S.cx <= fx_ + 30) ok++; }
+    s.copInFoot = nn ? ok / nn : NaN; }
+  // hip forward velocity averaged over the stride (lab frame) and hip height above the plate at strike / lowest in stance / toe-off
+  const k0 = Math.ceil(a.t0 * FS_M), kt = Math.floor(a.t1 * FS_M);
+  for (const [v, suf] of [['gtr', ''], ['hjc', '_hjc']]) {
+    const p0 = ptAt(L[v], a.t0), p1 = ptAt(L[v], a.t1), pn = ptAt(L[v], tN);
+    s['hipVxStride' + suf] = (pn.x - p0.x) / (tN - a.t0) / 1000;
+    let mn = Math.min(p0.y, p1.y); for (let k = k0; k <= kt; k++) { if (!Number.isFinite(L[v].y[k])) { mn = NaN; break; } if (L[v].y[k] < mn) mn = L[v].y[k]; }
+    s['hy_fs' + suf] = p0.y / 1000; s['hy_min' + suf] = mn / 1000; s['hy_to' + suf] = p1.y / 1000;
+    s['hyN_fs' + suf] = p0.y / 1000 / subj.height; s['hyN_min' + suf] = mn / 1000 / subj.height; s['hyN_to' + suf] = p1.y / 1000 / subj.height;
+  }
+  return fl;
 }
 
 // ---------------------------------------------------------------- processed-file comparison (same legs and strides logic as reduce-fukuchi)
@@ -419,7 +518,7 @@ function main() {
 
   for (const sid of ids) {
     const id = String(sid).padStart(3, '0'), height = heights[ids.indexOf(sid)];
-    const st = loadStatic(id), ptab = readTable(path.join(DIR, `RBDS${id}processed.txt`)), subj = { height };
+    const st = loadStatic(id), ptab = readTable(path.join(DIR, `RBDS${id}processed.txt`)), subj = { height, mass: masses[ids.indexOf(sid)] };
     const trials = SPEEDS.map(sp => prepTrial(id, sp, st, log));
     // ground: median lowest foot-marker height at mid-stance over every clean contact of the subject
     const gs = []; for (const T of trials) for (const c of T.contacts) gs.push(c.low);
@@ -460,11 +559,18 @@ function main() {
         });
       }
       const rej = log.rej;
-      const legRecs = {}, fsOf = {};
+      const legRecs = {}, fsOf = {}, legFL = {};
       for (const s of ['R', 'L']) {
         fsOf[s] = (info[sid][ix(s + 'FSI' + sp)] || '').trim(); fsNames.add(fsOf[s]);
         const recs = strideMetrics(T, st, subj, ground, s, rej);
         if (recs.length < 5) { if (recs.length) rej.fewStrides++; legRecs[s] = null; continue; }
+        {   // force-line record of the leg: scalars, curves c_<q>_<i> (mean of strides with a valid value) and ok_<q>_<i> (fraction valid)
+          const f = { nStrides: recs.length }, fls = recs.fl;
+          for (const k in fls[0].s) { const v = fin(fls.map(x => x.s[k])); f[k] = v.length ? mean(v) : NaN; }
+          for (const q of FL_CURVES) FL_PCT.forEach((p, i) => {
+            const v = fin(fls.map(x => x.c[q][i])); f[`c_${q}_${i}`] = v.length ? mean(v) : NaN; f[`ok_${q}_${i}`] = v.length / fls.length; });
+          legFL[s] = f;
+        }
         const rec = { nStrides: recs.length };
         for (const k in recs[0]) { const v = fin(recs.map(r => r[k])); rec[k] = v.length ? mean(v) : NaN; }
         Object.assign(rec, stand);
@@ -475,7 +581,7 @@ function main() {
         legRecs[s] = rec; log.strides[sp] += recs.length;
         legVals[s][sp].push({ id: sid, rec });
       }
-      subjRows.push({ id: sid, sp, height, mass: masses[ids.indexOf(sid)], fsOf, legRecs, ground });
+      subjRows.push({ id: sid, sp, height, mass: masses[ids.indexOf(sid)], fsOf, legRecs, legFL, ground });
     }
     process.stdout.write(`\rsubject ${sid}/${NSUBJ}`);
   }
@@ -488,11 +594,16 @@ function main() {
     return out;
   };
   const cohortRows = { all: { 25: [], 35: [], 45: [] }, rearfoot: { 25: [], 35: [], 45: [] } };
+  const flRows = { all: { 25: [], 35: [], 45: [] }, rearfoot: { 25: [], 35: [], 45: [] } };
   for (const r of subjRows) {
     const all = ['R', 'L'].filter(s => r.legRecs[s]).map(s => r.legRecs[s]);
     const rear = ['R', 'L'].filter(s => r.legRecs[s] && r.fsOf[s] === REAR).map(s => r.legRecs[s]);
     if (all.length) cohortRows.all[r.sp].push({ id: r.id, height: r.height, v: avgLegs(all) });
     if (rear.length) cohortRows.rearfoot[r.sp].push({ id: r.id, height: r.height, v: avgLegs(rear) });
+    const fa = ['R', 'L'].filter(s => r.legFL[s]).map(s => r.legFL[s]);
+    const fr = ['R', 'L'].filter(s => r.legFL[s] && r.fsOf[s] === REAR).map(s => r.legFL[s]);
+    if (fa.length) flRows.all[r.sp].push({ id: r.id, v: avgLegs(fa) });
+    if (fr.length) flRows.rearfoot[r.sp].push({ id: r.id, v: avgLegs(fr) });
   }
   const KEYS = Object.keys(cohortRows.all[25][0].v).filter(k => k !== 'nLegs');
   const stat = vals => { const v = fin(vals); return { mean: r4(mean(v)), sd: r4(sd(v)), n: v.length }; };
@@ -554,18 +665,57 @@ function main() {
       const w = regs.vsSpeed[c][k].within; summary.regressions.vsSpeedWithinSubject[c][k] = w ? { slope: r4(w.slope), se: r4(w.se), n: w.n } : null;
     }
   }
+  // ------------------------------------------------ force line block (added to the JSON as a new "forceLine" entry only)
+  const FLK = Object.keys(flRows.all[25][0].v).filter(k => k !== 'nLegs' && k !== 'nStrides');
+  const FL_SCALARS = FLK.filter(k => !/^(c|ok)_/.test(k));
+  const merged = (c, sp) => cohortRows[c][sp].map((r, i) => Object.assign({}, r.v, flRows[c][sp][i].v));
+  const FL_REG = [['brakeImpulse', 'fs_landDeg', 'braking impulse vs landDeg'], ['contactMs', 'fs_landDeg', 'contact time vs landDeg'], ['lineAtHip_20_40', 'fs_landDeg', 'lineAtHip 20-40 % vs landDeg'],
+                  ['to_landDeg', 'fs_landDeg', 'toe-off landDeg vs strike landDeg'], ['peakKneeStance', 'contactMs', 'peak stance knee vs contact time'], ['hipDrop', 'contactMs', 'hip drop vs contact time'],
+                  ['peakKneeStance', 'fs_landDeg', 'peak stance knee vs landDeg']];   // [y, x, label]
+  const flRegs = {};
+  for (const c of ['all', 'rearfoot']) { flRegs[c] = {}; for (const [y, x, lab] of FL_REG) { flRegs[c][lab] = {}; for (const sp of SPEEDS) { const m = merged(c, sp); flRegs[c][lab][SPEED_LABEL[sp]] = ols(m.map(r => r[x]), m.map(r => r[y])); } } }
+  summary.forceLine = {
+    method: {
+      note: 'added measurement: ground force line relative to the hip through the contact; the earlier fields of this file are unchanged',
+      points: 'stance fractions 0, 5 ... 100 %; 0 and 100 % = the raw 20 N strike and toe-off; markers by cubic interpolation, forces by linear interpolation',
+      filter: `Fx, Fy and COPx of each contact are low-passed at ${FL_LP} Hz (zero-lag 2nd-order Butterworth forward and backward, odd-reflection padding) for this block only; before filtering, COPx samples with Fy < ${FL_MINFY} BW are replaced by the nearest valid value`,
+      mask: `copAhead*, copAlongFoot, fxOverFy and lineAtHip* are NaN where Fy < ${FL_MINFY} BW; stride, leg and subject means use the valid points only (ok_* = fraction of strides valid)`,
+      signs: 'forward +; Fx is the force on the runner (braking negative); copAhead* = COPx - x(point), m; copAlongFoot = copAheadHeel / standing heel-to-forefoot-marker distance (X, m; forefoot = MT1/MT5 midpoint)',
+      lineAtHip: 'copAheadHip + (Fx/Fy) * hip height above the plate; hip height above the plate = the marker Y of the hip point (the plate is Y = 0), i.e. the marker hip height used elsewhere plus the subject marker-ground offset (about 35 mm)',
+      hipVelocity: 'hipVx / hipVy: lab-frame velocity of the trochanter-marker hip point, m/s; hipVxStride = (x at next strike - x at strike) / stride time',
+      impulses: 'brakeImpulse / propImpulse = integral of negative / positive Fx dt / body mass, m/s, 300 Hz samples over the contact',
+      events: 'fxZeroPct = first upward zero crossing of Fx after its minimum; copZeroPct = first + to - crossing of copAheadHip (1 % grid, valid force only); heelOffPct = Heel.Bottom first 10 mm above its 40-60 % stance median; peakFyPct = time of the maximum Fy; all as % of stance',
+      copInFoot: 'fraction of valid points at 20-60 % of stance with heel x - 30 mm <= COPx <= max(MT1, MT5) x + 30 mm',
+      hyN: 'hy_* = hip height above the plate (m) at strike, lowest in stance, toe-off; hyN_* divided by subject height; suffix _hjc = pelvis-regression hip'
+    },
+    pct: FL_PCT, cohorts: { all: {}, rearfoot: {} }, regressions: {}
+  };
+  for (const c in flRows) for (const sp of SPEEDS) {
+    const rows = flRows[c][sp], e = { n: rows.length, scalars: {}, curves: {} };
+    for (const k of FL_SCALARS) e.scalars[k] = stat(rows.map(r => r.v[k]));
+    for (const q of FL_CURVES) {
+      const o = { mean: [], sd: [], n: [], okFrac: [] };
+      FL_PCT.forEach((p, i) => { const s = stat(rows.map(r => r.v[`c_${q}_${i}`])); o.mean.push(s.mean); o.sd.push(s.sd); o.n.push(s.n); o.okFrac.push(r4(mean(fin(rows.map(r => r.v[`ok_${q}_${i}`]))))); });
+      e.curves[q] = o;
+    }
+    summary.forceLine.cohorts[c][SPEED_LABEL[sp]] = e;
+  }
+  for (const c in flRegs) { summary.forceLine.regressions[c] = {}; for (const lab in flRegs[c]) { summary.forceLine.regressions[c][lab] = {}; for (const sp in flRegs[c][lab]) summary.forceLine.regressions[c][lab][sp] = roundReg(flRegs[c][lab][sp]); } }
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
   fs.writeFileSync(OUT, JSON.stringify(summary));
 
   // ------------------------------------------------ CSV
   {
     const baseCols = ['subject', 'speed', 'height_m', 'mass_kg', 'footstrike', 'groundMarkerY_mm', 'legs', 'strides'];
-    const lines = [baseCols.concat(KEYS).join(',')];
+    const FLCSV = FLK.filter(k => !/^ok_/.test(k)).map(k => (/^c_/.test(k) ? k.replace(/^c_(.*)_(\d+)$/, (m, q, i) => `fl_${q}_${FL_PCT[i]}`) : `fl_${k}`));
+    const FLSRC = FLK.filter(k => !/^ok_/.test(k));
+    const lines = [baseCols.concat(KEYS, FLCSV).join(',')];
     for (const r of subjRows) {
       const legs = ['R', 'L'].filter(s => r.legRecs[s]).map(s => r.legRecs[s]);
       if (!legs.length) continue;
       const a = avgLegs(legs), num = x => Number.isFinite(x) ? Number(x.toPrecision(5)) : '';
-      lines.push([r.id, SPEED_LABEL[r.sp], r.height, r.mass, `${r.fsOf.R || '?'}/${r.fsOf.L || '?'}`, num(r.ground), ['R', 'L'].filter(s => r.legRecs[s]).join(''), legs.reduce((s, l) => s + l.nStrides, 0)].concat(KEYS.map(k => num(a[k]))).join(','));
+      const fa = avgLegs(['R', 'L'].filter(s => r.legFL[s]).map(s => r.legFL[s]));
+      lines.push([r.id, SPEED_LABEL[r.sp], r.height, r.mass, `${r.fsOf.R || '?'}/${r.fsOf.L || '?'}`, num(r.ground), ['R', 'L'].filter(s => r.legRecs[s]).join(''), legs.reduce((s, l) => s + l.nStrides, 0)].concat(KEYS.map(k => num(a[k])), FLSRC.map(k => num(fa[k]))).join(','));
     }
     fs.mkdirSync(path.dirname(CSV), { recursive: true });
     fs.writeFileSync(CSV, lines.join('\n') + '\n');
@@ -620,6 +770,37 @@ function main() {
   for (const c of ['all', 'rearfoot']) {
     P(`\n  cohort ${c}: y against speed`);
     for (const [k, lab] of SPEED_Y) { const g = regs.vsSpeed[c][k]; P('    ' + lab.padEnd(28) + 'pooled ' + fmtReg(g.pooled).padEnd(40) + 'within-subject ' + (g.within ? `${g.within.slope.toPrecision(3)} ± ${g.within.se.toPrecision(2)} (n=${g.within.n})` : '-')); }
+  }
+  // ------------------------------------------------ force line report
+  P('\n================ FORCE LINE (forces, COPx low-passed at 30 Hz for this part only; points with Fy < 0.2 BW masked) ================');
+  const fl = (c, sp) => summary.forceLine.cohorts[c][SPEED_LABEL[sp]];
+  const SC = [['brakeImpulse', 'm/s', 3], ['propImpulse', 'm/s', 3], ['peakFyBW', 'BW', 2], ['peakFyPct', '% stance', 1], ['fxZeroPct', '% stance', 1], ['copZeroPct', '% stance', 1], ['heelOffPct', '% stance', 1],
+              ['lineAtHip_20_40', 'm', 3], ['lineAtHip_20_40_hjc', 'm', 3], ['hipVxStride', 'm/s', 3], ['hipVxStride_hjc', 'm/s', 3], ['copInFoot', 'fraction', 2],
+              ['hy_fs', 'm', 3], ['hy_min', 'm', 3], ['hy_to', 'm', 3], ['hyN_fs', '/height', 3], ['hyN_min', '/height', 3], ['hyN_to', '/height', 3], ['hyN_fs_hjc', '/height', 3], ['hyN_min_hjc', '/height', 3], ['hyN_to_hjc', '/height', 3]];
+  for (const c of ['all', 'rearfoot']) {
+    P(`\ncohort ${c}: per-contact scalars (mean ± SD across subjects, n)`);
+    P('metric'.padEnd(26) + SPEEDS.map(sp => (SPEED_LABEL[sp] + ' m/s').padStart(24)).join(''));
+    for (const [k, u, d] of SC) P(`${k} [${u}]`.padEnd(26) + SPEEDS.map(sp => { const s = fl(c, sp).scalars[k]; return (s && s.mean !== null ? `${s.mean.toFixed(d)} ± ${s.sd === null ? '-' : s.sd.toFixed(d)} (${s.n})` : '-').padStart(24); }).join(''));
+    const ratio = SPEEDS.map(sp => { const rows = flRows[c][sp].map(r => r.v.propImpulse / r.v.brakeImpulse); return `${SPEED_LABEL[sp]}: ${mean(fin(rows)).toFixed(2)} ± ${sd(fin(rows)).toFixed(2)}`; }).join(', ');
+    P(`  propulsive / braking impulse per subject: ${ratio}`);
+  }
+  const CT = [['copAheadHip', 'copAheadHip gtr [m]', 3], ['copAlongFoot', 'copAlongFoot [-]', 2], ['fxOverFy', 'Fx/Fy [-]', 3], ['lineAtHip', 'lineAtHip gtr [m]', 3], ['lineAtHipHjc', 'lineAtHip hjc [m]', 3], ['fyBW', 'Fy [BW]', 2]];
+  const IDX = FL_PCT.map((p, i) => i).filter(i => FL_PCT[i] % 10 === 0);
+  for (const c of ['all', 'rearfoot']) for (const sp of SPEEDS) {
+    P(`\ncurves, cohort ${c}, ${SPEED_LABEL[sp]} m/s (mean ± SD across ${fl(c, sp).n} subjects) at % of stance`);
+    P(''.padEnd(22) + IDX.map(i => String(FL_PCT[i]).padStart(13)).join(''));
+    for (const [q, lab, d] of CT) { const o = fl(c, sp).curves[q]; P(lab.padEnd(22) + IDX.map(i => (o.mean[i] === null ? '-' : `${o.mean[i].toFixed(d)}±${o.sd[i] === null ? '-' : o.sd[i].toFixed(d)}`).padStart(13)).join('')); }
+    P('valid-force fraction'.padEnd(22) + IDX.map(i => String(fl(c, sp).curves.fxOverFy.okFrac[i]).padStart(13)).join(''));
+  }
+  P('\nacross-subject regressions (slope of y on x ± SE, r, n)');
+  for (const c of ['all', 'rearfoot']) {
+    P(`  cohort ${c}`);
+    for (const [y, x, lab] of FL_REG) P('    ' + lab.padEnd(36) + SPEEDS.map(sp => `${SPEED_LABEL[sp]}: ${fmtReg(flRegs[c][lab][SPEED_LABEL[sp]])}`).join('  |  '));
+  }
+  P('\nhip vertical motion, model-vs-measured: hip height above the plate / subject height (trochanter marker; hjc in brackets)');
+  for (const c of ['all', 'rearfoot']) for (const sp of SPEEDS) {
+    const s = fl(c, sp).scalars, g = k => `${s[k].mean.toFixed(3)}±${s[k].sd.toFixed(3)}`;
+    P(`  ${c.padEnd(8)} ${SPEED_LABEL[sp]} m/s  strike ${g('hyN_fs')} (${s.hyN_fs_hjc.mean.toFixed(3)})  min ${g('hyN_min')} (${s.hyN_min_hjc.mean.toFixed(3)})  toe-off ${g('hyN_to')} (${s.hyN_to_hjc.mean.toFixed(3)})`);
   }
   console.log(rep.join('\n'));
   console.log('\nwrote ' + path.relative(process.cwd(), OUT) + ' and ' + CSV);
