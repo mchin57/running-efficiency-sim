@@ -31,9 +31,9 @@ near('fold, each joint pays its own way, W', simulate({ ...man, mode: 'fold', sh
 // Realistic stride at 3 m/s
 const r = simulate({ ...man, mode: 'real', speed: 3 });
 near('realistic swing, W', r.mech, 160.9, 2);
-near('realistic stance, W', r.stance.mech, 264.0, 3);
-near('contact time, ms', r.info.tc * 1000, 259.5, 2);
-near('peak ground force, x body weight', r.info.peakGRF, 2.62, 0.02, 2);
+near('realistic stance, W', r.stance.mech, 284.0, 3);
+near('contact time, ms', r.info.tc * 1000, 293.4, 2);
+near('peak ground force, x body weight', r.info.peakGRF, 1.97, 0.02, 2);
 // joint power equals the ground force's power on the body (the planted foot point never moves)
 below('stance energy balance error, %', r.stance.balanceErr * 100, 0.01);
 // steady running: the body ends each step with the energy it started with, so stance work nets to zero
@@ -82,15 +82,32 @@ for (const v of [3, 6]) {
   const stanceEnd = (P.stanceAt(P.tc).th - P.stanceAt(P.tc - hh).th) / hh;
   near(`thigh speed: swing start minus stance end at ${v} m/s, deg/s`, (s.K.thd[0] - stanceEnd) * 180 / Math.PI, 0, 2);
 }
-{ // slow running: the heel waits for the knee's deepest bend before lifting, so the centre of pressure moves smoothly
-  const s = simulate({ ...man, mode: 'real', speed: 2, cadence: 180 }), K = s.K; let jump = 0;
+{ // slow running (2 m/s at its typical cadence): the heel waits for the knee's deepest bend before lifting, so the centre of pressure moves smoothly
+  const s = simulate({ ...man, mode: 'real', speed: 2, cadence: typicalCadence(2) }), K = s.K; let jump = 0;
   for (let i = 1; i < s.N; i++) if (K.stance[i] && K.stance[i - 1]) jump = Math.max(jump, Math.abs(K.copX[i] - K.copX[i - 1] + 2 * s.dt));
-  below('2 m/s: largest centre-of-pressure step along the foot between samples, cm', jump * 100, 1, 2);
-  below('2 m/s: stance hip work per step, J', s.stance.hipPos + s.stance.hipNeg, 0.01);
+  below('2 m/s at its typical cadence: largest centre-of-pressure step along the foot between samples, cm', jump * 100, 1, 2);
+  below('2 m/s at its typical cadence: stance hip work per step, J', s.stance.hipPos + s.stance.hipNeg, 0.01);
+}
+{ // touchdown knee: the typical stride lands with the typical bend; a leg that would lock straight lands with more
+  const d = simulate({ ...man, mode: 'real', speed: 3 }).info;
+  near('default stride: touchdown knee bend, degrees', d.kneeTDDeg, 10, 1e-9, 3);
+  console.log(`${d.kneeTDRaised === false ? 'ok  ' : 'FAIL'} default stride: touchdown knee bend is not raised (${d.kneeTDRaised})`);
+  if (d.kneeTDRaised !== false) failures++;
+  const H = 1.75, s = simulate({ ...man, H, M: 25 * H * H, mode: 'real', speed: 4.5, cadence: 220, landDeg: 0 });
+  const raised = s.info.kneeTDRaised === true;
+  if (!raised) failures++;
+  console.log(`${raised ? 'ok  ' : 'FAIL'} straight-landing, short stride (4.5 m/s, 220 steps/min, landing 0): touchdown knee bend is raised (${s.info.kneeTDDeg.toFixed(1)} deg)`);
+  below('  ... and the leg still reaches the foot (reachShort), m', s.info.reachShort, 0, 6);
+  below('  ... and the energy balance error', s.stance.balanceErr, 1e-4, 8);
+  const f = simulate({ ...man, H, M: 25 * H * H, mode: 'real', speed: 6, cadence: 140, landDeg: 30, contactMs: 250 });
+  let mk = 1e9; for (const ph of f.K.ph) mk = Math.min(mk, ph);
+  const okk = mk * 180 / Math.PI >= -6;
+  if (!okk) failures++;
+  console.log(`${okk ? 'ok  ' : 'FAIL'} far-forward landing at 6 m/s, 140 steps/min: smallest knee angle in the stride, degrees: ${(mk * 180 / Math.PI).toFixed(1)} (at least -6)`);
 }
 
 // Toe roll and contact length: with the foot rolling off the toe tip, contact gets close to measured lengths
-// (contact time 0.78 v^-0.89 s; Clark, Meng & Stearne 2020). At 3 m/s balance stops it short; by 6 m/s it matches.
+// (contact time 0.78 v^-0.89 s; Clark, Meng & Stearne 2020). It matches at 3 m/s and at 6 m/s.
 for (const [v, tol] of [[3, 15], [6, 3]]) {
   const s = simulate({ ...man, mode: 'real', speed: v }), want = 780 * v ** -0.89;
   below(`contact time at ${v} m/s, % short of measured ${want.toFixed(0)} ms`, 100 * (1 - s.info.tc * 1000 / want), tol, 1);
@@ -115,8 +132,9 @@ for (const [v, tol] of [[3, 15], [6, 3]]) {
   console.log(`${distinct < 4 ? 'FAIL' : 'ok  '} heel-lift start changes smoothly with contact time (${distinct} distinct of 4)`);
   near('that setting at 115.5 ms balances (skew solves)', realisticPlan({ ...o, contactMs: 115.5 }, L, 120 / 220).unbalanced ? 1 : 0, 0, 0, 0);
   const d = simulate({ ...man, mode: 'real', speed: 3 }).info;
-  if (d.minWhy !== 'balance' || d.maxWhy !== 'balance') failures++;
-  console.log(`${d.minWhy === 'balance' && d.maxWhy === 'balance' ? 'ok  ' : 'FAIL'} default contact range is set by balance at both ends (${d.minWhy}, ${d.maxWhy})`);
+  // (the longer contact is now limited by the flight time running out ('air'), the shorter one by balance)
+  if (d.minWhy !== 'balance' || d.maxWhy !== 'air') failures++;
+  console.log(`${d.minWhy === 'balance' && d.maxWhy === 'air' ? 'ok  ' : 'FAIL'} default contact range: shortest set by balance, longest by flight time (${d.minWhy}, ${d.maxWhy})`);
 }
 { // at the cadence measured for each speed, the typical stride balances (no warning) from 2 to 6 m/s
   let flagged = [];

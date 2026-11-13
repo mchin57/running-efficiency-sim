@@ -97,6 +97,9 @@ function main() {
   console.log(`Model vs Fukuchi et al. 2017, cohort "${args.cohort}", ${sum.subjects.n} subjects (${men} men, ${women} women), H ${H} m, M ${M} kg`);
   if (Object.keys(args.set).length) console.log('extra model options: ' + JSON.stringify(args.set));
 
+  // rows that can never match by construction of the model (see the note printed under each table)
+  const STRUCTURAL = new Set(['hipExtMomStance', 'hipFlxMomStance', 'hipPosStance', 'hipNegStance', 'hipExtMomAll', 'anklePosSwing', 'ankleNegSwing']);
+  const isStructural = k => STRUCTURAL.has(k) || k.startsWith('hipLever_');
   const totals = { ok: 0, '~': 0, OUT: 0 }, report = { cohort: args.cohort, options: args.set, subjects: sum.subjects, speeds: {} };
   for (const sp of speeds) {
     const meas = sum.cohorts[args.cohort][sp];
@@ -111,13 +114,14 @@ function main() {
       let z = NaN, flag = '';
       if (ref && ref.sd && Number.isFinite(m) && k !== 'vertImpulseCheck') {
         z = (m - ref.mean) / ref.sd;
-        flag = Math.abs(z) <= 1 ? 'ok' : Math.abs(z) <= 2 ? '~' : 'OUT';
-        counts[flag]++;
+        if (isStructural(k)) flag = 'n/a*';          // shown, but not scored
+        else { flag = Math.abs(z) <= 1 ? 'ok' : Math.abs(z) <= 2 ? '~' : 'OUT'; counts[flag]++; }
       }
       rows[k] = { model: m, mean: ref ? ref.mean : null, sd: ref ? ref.sd : null, z: Number.isFinite(z) ? z : null, flag };
       console.log(k.padEnd(18) + unitOf(k).padEnd(10) + fmt(m).padStart(9) + '  ' + (fmt(ref && ref.mean) + ' ± ' + fmt(ref && ref.sd)).padEnd(22) +
                   (Number.isFinite(z) ? z.toFixed(1) : '-').padStart(7) + '  ' + flag);
     }
+    console.log('* not scored: the planted leg is treated as weightless (no stance hip moment), the swing ankle is not modelled, and the measured hip lever includes the leg\'s own inertia.');
     console.log('\nStance curves, model vs measured mean (RMSE in native units, and as % of the measured curve range):');
     const curves = {};
     for (const c of STANCE_CURVES) {
