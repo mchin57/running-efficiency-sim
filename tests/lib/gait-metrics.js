@@ -85,6 +85,29 @@ function computeMetrics(r) {
   s.ankleAtStrike = r.ankleAng[0];
   s.anklePeakDF = maxOver(r.ankleAng, 0, kTO).v;
   s.ankleAtToeOff = r.ankleAng[kTO];
+
+  // ankle as a spring: ankle moment against ankle angle over stance samples lo..hi (no interpolation; at least 4 samples, else NaN)
+  const fitMomAng = (lo, hi) => {
+    const m = hi - lo + 1;
+    if (m < 4) return null;
+    let sx = 0, sy = 0;
+    for (let k = lo; k <= hi; k++) { if (!Number.isFinite(r.ankleAng[k]) || !Number.isFinite(r.ankleMom[k])) return null; sx += r.ankleAng[k]; sy += r.ankleMom[k]; }
+    const mx = sx / m, my = sy / m;
+    let sxx = 0, sxy = 0, syy = 0;
+    for (let k = lo; k <= hi; k++) { const dx = r.ankleAng[k] - mx, dy = r.ankleMom[k] - my; sxx += dx * dx; sxy += dx * dy; syy += dy * dy; }
+    if (!(sxx > 0)) return null;
+    const slope = sxy / sxx;
+    return { slope, mx, my, r2: syy > 0 ? sxy * sxy / (sxx * syy) : NaN };
+  };
+  const angPk = maxOver(r.ankleAng, 0, kTO), momPk = maxOver(r.ankleMom, 0, kTO);
+  const load = angPk.i < 0 ? null : fitMomAng(Math.ceil(0.2 * kTO - 1e-9), angPk.i);
+  const unload = momPk.i < 0 ? null : fitMomAng(momPk.i, Math.floor(0.9 * kTO + 1e-9));
+  s.ankleStiffLoad = load ? load.slope : NaN;
+  s.ankleEngageDeg = load && load.slope !== 0 ? load.mx - load.my / load.slope : NaN;   // angle where the fitted line crosses zero moment
+  s.ankleStiffR2 = load ? load.r2 : NaN;
+  s.ankleStiffUnload = unload ? unload.slope : NaN;
+  s.anklePeakDFAt = angPk.i < 0 ? NaN : 100 * angPk.i / kTO;
+
   const hmax = maxOver(r.hipAng, 0, last).v, hmin = minOver(r.hipAng, 0, last).v;
   s.hipROM = hmax - hmin;
 
