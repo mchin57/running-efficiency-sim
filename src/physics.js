@@ -57,19 +57,24 @@ function blankK(N) {
 // knee bend at a typical speed just after touchdown; later the heel lifts just enough to stop the knee straightening past
 // a floor that ends near 22 degrees at toe-off.
 // Typical values for a speed v (m/s) come from measured running. Clark, Meng & Stearne 2020 (154 trials at 3.1-10 m/s):
-// thigh angle at touchdown 0.033 v + 0.335 rad, contact time 0.78 v^-0.89 s (scaled with height from a 1.75 m runner),
-// peak swing thigh flexion 0.102 v + 0.273 rad. Touchdown knee bend, foot-flat time, heel-lift time and the pressure travel
-// follow 21 heel-striking runners at 3.5 m/s (Fukuchi et al. 2017 public dataset; see tests/validate.js). Cadence: a straight-line fit, 133.9 + 10.9 v steps/min, to 28 recreational
+// contact time 0.78 v^-0.89 s (scaled with height from a 1.75 m runner), peak swing thigh flexion 0.102 v + 0.273 rad.
+// The typical landing point is measured directly from the hip and ankle markers of 28 runners at 2.5-4.5 m/s (Fukuchi et al.
+// 2017 public dataset; tools/landing-fukuchi.js): 13.9 degrees at 3.5 m/s, 3.3 degrees per m/s, continued above 4.5 m/s at the
+// slope implied by Clark's thigh fit (1.73 degrees per m/s). Clark's thigh-at-touchdown fit is no longer used because it runs
+// 2-7 degrees above these runners. Touchdown knee bend (12 degrees), foot-flat time, heel-lift time and the pressure travel
+// follow the heel strikers among those runners (see tests/validate.js). Cadence: a straight-line fit, 133.9 + 10.9 v steps/min, to 28 recreational
 // runners at 2.5, 3.5 and 4.5 m/s (Fukuchi et al. 2017, Table 4: 80.8, 85.7 and 91.7 strides/min).
-const REAL = { kneeTD: 10, kneeTO: 22, kneeMinTO: 10, kneeRateTD: 300, kneeRateTOMax: 600,
+const REAL = { kneeTD: 12, kneeTO: 22, kneeMinTO: 10, kneeRateTD: 300, kneeRateTOMax: 600,
                strikeDeg: 12, flatAt: 0.12, rollStart: 0.55, liftKnee: 30, copMin: 0.10, copEase: 1.5, kneeFloorTD: 3, kneeTDMax: 30, kneeRateTDSwingMax: 450, holdAt: 0.85, rollMax: 65, skewMax: 0.5,
                toeLen: 0.30, tipAt: 0.6, toeRollMax: 45,           // toes are 30% of the foot; pressure reaches the tip 60% into the lift
-               thighTD: [0.033, 0.335], contactTime: [0.78, -0.89], refHeight: 1.75, cadence: [10.92, 133.9],
+               landing: { at: 3.5, deg: 13.9, slope: 3.3, kneeSpeed: 4.5, slopeFast: 1.73, min: 5 }, contactTime: [0.78, -0.89], refHeight: 1.75, cadence: [10.92, 133.9],
                thighFlex: [0.102, 0.273], retractMin: 4,   // peak swing thigh flexion = 0.102 v + 0.273 rad (v in m/s)
                termKnee: 14, clearBoostMax: 15 };          // knee bend at 88% of swing; most extra thigh swing for foot clearance
 const sstep = s => { s = Math.min(1, Math.max(0, s)); return s * s * s * (s * (6 * s - 15) + 10); };
 // typical cadence (steps per minute, both feet) at speed v
 function typicalCadence(v) { return REAL.cadence[0] * v + REAL.cadence[1]; }
+// typical landing point (degrees from vertical, hip to ankle at touchdown) at speed v
+function typicalLanding(v) { const L = REAL.landing, base = L.deg + L.slope * (Math.min(v, L.kneeSpeed) - L.at); return Math.max(L.min, base + L.slopeFast * Math.max(0, v - L.kneeSpeed)); }
 
 // Everything about the stride that does not depend on the late-swing knee bend: contact timing, ground force,
 // body motion and the stance-leg geometry.
@@ -88,14 +93,15 @@ function planFor(o, leg, T, kneeTDdeg = REAL.kneeTD) {
   // ball (toe joint) relative to the toe tip when the toes are rolled up by g
   const toeOff = g => [-Lt * Math.cos(g), Lt * Math.sin(g)];
   // landing point: angle from vertical of the line from the hip to the ground under the ankle at touchdown. Typical: the
-  // thigh is at the measured touchdown angle with the knee at 10 degrees.
+  // measured landing point (typicalLanding) with the knee at the typical touchdown bend.
   const b0 = REAL.strikeDeg * D, strike = heelOff(b0);
   // The typical landing point always uses the typical touchdown knee (REAL.kneeTD), even when this plan lands with more bend.
   const dTyp = reach(REAL.kneeTD * D);
   const hipAtTypical = x => Math.sqrt(Math.max(dTyp * dTyp - x * x, 1e-6)) + strike[1];
-  const thighAtHipAnkle = Math.acos((L1 * L1 + dTyp * dTyp - Ls * Ls) / (2 * L1 * dTyp));   // thigh ahead of the hip-ankle line
-  const aTyp = Math.max(0, dTyp * Math.sin(REAL.thighTD[0] * v + REAL.thighTD[1] - thighAtHipAnkle));
-  const landTypical = Math.atan(aTyp / hipAtTypical(aTyp)) / D;
+  const landTypical = typicalLanding(v);
+  // the ankle's horizontal distance ahead of the hip that gives that angle with the typical touchdown posture
+  let aTyp = 0.2;
+  for (let it = 0; it < 60; it++) aTyp = Math.min(0.9 * dTyp, Math.tan(landTypical * D) * hipAtTypical(aTyp));
   const landWanted = o.landDeg != null ? o.landDeg : landTypical;
   const dTD = reach(kneeTDdeg * D);                          // the real touchdown posture of this plan
   const hipAtTD = x => Math.sqrt(Math.max(dTD * dTD - x * x, 1e-6)) + strike[1];
